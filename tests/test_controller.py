@@ -116,11 +116,11 @@ def test_each_touch_moves_the_timbre():
     assert circular(ctrl.current(t)[0].timbre, before) > 0.5
 
 
-def test_a_long_pause_changes_the_note():
+def test_retouching_plays_a_new_note_but_a_contact_glitch_does_not():
     ctrl = TouchController(RATE, seed=2)
     t = play(ctrl, [0.6] * 50, rest(ctrl, 0.5))
     first = ctrl.current(t)[0].root_hz
-    t = play(ctrl, [0.6] * 50, rest(ctrl, 1.0, t))   # short pause: same note
-    assert ctrl.current(t)[0].root_hz == first
-    t = play(ctrl, [0.6] * 50, rest(ctrl, 6.0, t))   # long pause: new note
-    assert ctrl.current(t)[0].root_hz != first
+    t = play(ctrl, [0.6] * 50, rest(ctrl, 0.06, t))  # 60 ms dropout of the pins
+    assert ctrl.current(t)[0].root_hz == pytest.approx(first, rel=1e-6)
+    t = play(ctrl, [0.6] * 50, rest(ctrl, 0.5, t))   # a real re-touch
+    assert ctrl.current(t)[0].root_hz != pytest.approx(first, rel=1e-3)
