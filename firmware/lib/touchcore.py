@@ -36,6 +36,8 @@ class TouchSensor:
     """Turns hum-free ADC window means into (conductance_us, intensity 0..1, touched)."""
 
     def __init__(self, r_pullup, r_series, update_hz=50.0, g_max_us=G_MAX_US):
+        if g_max_us <= TOUCH_ON_US:
+            raise ValueError("g_max_us must be above the touch threshold (0.1 uS)")
         self.r_pullup = r_pullup
         self.r_series = r_series
         self.touched = False

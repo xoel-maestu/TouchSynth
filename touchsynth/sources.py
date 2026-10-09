@@ -71,8 +71,8 @@ class SerialSource(_ThreadedSource):
 
     def _run(self) -> None:
         while not self._stopping.is_set():
-            port = self._fixed_port or self._finder()
             try:
+                port = self._fixed_port or self._finder()
                 if port is None:
                     raise OSError("Pico not found")
                 link = self._opener(port)
@@ -86,8 +86,8 @@ class SerialSource(_ThreadedSource):
                 print(f"\nserial: {error!r}", file=sys.stderr)
             finally:
                 self.connected = False
-                link.close()
-                self._on_reading(RELEASED)
+                _quietly(link.close)
+                _quietly(self._on_reading, RELEASED)
             self._stopping.wait(RETRY_S)
 
     def _pump(self, link) -> None:
@@ -95,6 +95,14 @@ class SerialSource(_ThreadedSource):
             reading = parse_line(link.readline().decode("ascii", errors="ignore"))
             if reading is not None:
                 self._on_reading(reading)
+
+
+def _quietly(fn, *args) -> None:
+    """Best-effort cleanup call: a failure here must not kill the reader thread."""
+    try:
+        fn(*args)
+    except Exception as error:
+        print(f"\nserial: {error!r}", file=sys.stderr)
 
 
 def simulated_touch(t: float) -> tuple[float, bool]:

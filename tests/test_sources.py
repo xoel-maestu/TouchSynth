@@ -86,3 +86,29 @@ def test_recorder_writes_header_and_rows():
     text = buffer.getvalue().splitlines()
     assert text[0] == "host_s,ms,raw,g_us,intensity,touched"
     assert text[1] == "1.500000,10,60000,0.1000,0.0800,1"
+
+
+def test_reader_survives_failing_finder_and_callback():
+    calls, opened = {"finder": 0}, []
+
+    def finder():
+        calls["finder"] += 1
+        if calls["finder"] == 1:
+            raise RuntimeError("usb enumeration glitch")
+        return "/dev/ttyACM0"
+
+    def on_reading(reading):
+        if not reading.touched:
+            raise OSError("disk full")  # e.g. the recorder failing on RELEASED
+
+    def opener(port):
+        opened.append(port)
+        return BrokenSerial(["10,60000,0.1000,0.0800,1\r\n"])
+
+    source = SerialSource(None, on_reading, opener=opener, finder=finder)
+    source.start()
+    deadline = time.monotonic() + 4.0
+    while len(opened) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    source.stop()
+    assert len(opened) >= 2  # still reconnecting after both failures

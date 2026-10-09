@@ -123,3 +123,8 @@ def test_sudden_release_to_open_circuit_does_not_crash():
     assert intensity == 0.0 and touched is True
     _, _, touched = s.update(FULL_SCALE)
     assert touched is False
+
+
+def test_rejects_a_firm_level_below_the_touch_threshold():
+    with pytest.raises(ValueError):
+        TouchSensor(R_PULLUP, R_SERIES, g_max_us=0.05)

@@ -64,7 +64,7 @@ GND pin 38 ───────────────────────
 3. Pon ese valor en `G_MAX_US` de `firmware/code.py` y vuelve a desplegar.
    Ese contacto será intensidad 1.0; el roce más leve que se detecta (15 MΩ) es 0.
    Si alguien consigue un contacto mejor de forma sostenida (>3 s), el techo se
-   estira solo y vuelve a su valor en ~1 min; un pico suelto se ignora.
+   estira solo y vuelve a su valor en unos minutos; un pico suelto se ignora.
 
 ### Ajuste opcional de R1 (con polímetro)
 
