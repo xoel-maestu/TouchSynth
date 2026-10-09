@@ -27,10 +27,15 @@ def _fake_modules(level_for_window):
 
         def readinto(self, buf):
             level = level_for_window(window["n"])
+            window["n"] += 1
+            if level is None:  # ADC error bit: short read, rest of buffer is junk
+                for i in range(len(buf)):
+                    buf[i] = 0
+                return 1
             for i in range(len(buf)):
                 hum = 3000 * math.sin(2 * math.pi * MAINS_HZ * i / self.sample_rate)
                 buf[i] = max(0, min(65535, int(level + hum)))
-            window["n"] += 1
+            return len(buf)
 
     class DigitalInOut:
         def __init__(self, pin):
@@ -81,3 +86,12 @@ def test_firmware_streams_parseable_lines_and_rejects_hum(monkeypatch):
     assert firm.intensity > light.intensity + 0.5
     # a full mains period per window: the ±3000-count hum leaves < 1% error
     assert abs(light.raw - divider_raw(5e6)) < 0.01 * 65535
+
+
+def test_firmware_skips_short_adc_reads(monkeypatch):
+    def level(n):  # untouched, with a failed ADC window in the middle
+        return None if n == 5 else 65535
+
+    lines = run_firmware(monkeypatch, level, 10)
+    readings = [parse_line(line) for line in lines[1:]]
+    assert all(r.raw > 60000 for r in readings)  # the zeroed junk window never shows up

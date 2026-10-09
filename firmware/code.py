@@ -29,7 +29,8 @@ sensor = TouchSensor(R_PULLUP, R_SERIES, update_hz=SAMPLE_RATE / WINDOW)
 
 print("# touchsynth v1 fields=ms,raw,g_us,intensity,touched")
 while True:
-    adc.readinto(samples)
+    if adc.readinto(samples) < WINDOW:   # ADC error: the tail of the buffer is invalid
+        continue
     raw = sum(samples) // WINDOW   # boxcar over one mains period cancels 50/100/150 Hz hum
     g_us, intensity, touched = sensor.update(raw)
     led.value = touched
