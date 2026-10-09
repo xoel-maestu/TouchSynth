@@ -34,8 +34,8 @@ brillante, con más capas y presencia; golpe rápido → "florecimiento" de bril
 |---|---|---|
 | Raspberry Pi Pico 2 | RP2350 + CircuitPython 10.0.3 | `.uf2` incluido en el repo local |
 | R1 (pull-up) | **1 MΩ** | ajustable tras calibrar (470 kΩ – 2,2 MΩ) |
-| R2 (serie, protección) | **100 kΩ** | limita corriente y ESD |
-| C1 | **10 nF** (código `103`) | estabiliza el ADC y filtra 50 Hz |
+| R2 (serie, protección) | 100 kΩ, **opcional** | protección ESD; si la pones, `R_SERIES = 100_000` en `code.py` |
+| C1 | 10 nF (código `103`), **opcional** | estabiliza el ADC; no es imprescindible (la línea base se resta) |
 | 2 electrodos | placas/tubos metálicos, cinta de cobre, pulseras | cuanto más grandes y firmes al agarrarlos, mejor |
 | Cables, protoboard | | del kit |
 
@@ -43,8 +43,8 @@ brillante, con más capas y presencia; golpe rápido → "florecimiento" de bril
 
 ```
 3V3(OUT) pin 36 ──[ R1 1 MΩ ]──┬── GP26/ADC0 pin 31
-                               ├──[ C1 10 nF ]── AGND pin 33
-                               └──[ R2 100 kΩ ]── electrodo A  (persona A)
+                               ├──[ C1 10 nF, opcional ]── AGND pin 33
+                               └──[ R2 100 kΩ, opcional ]── electrodo A  (persona A)
 
 GND pin 38 ────────────────────────────────────── electrodo B  (persona B)
 ```
@@ -72,7 +72,12 @@ al pin, por eso el sonido no variaba).
 1. Arranca el sintetizador (abajo). El medidor muestra `G=… uS` (conductancia).
 2. Tocaos con la **palma firme** unos segundos y anota el valor `G`.
 3. Pon ese valor en `G_MAX_US` de `firmware/code.py` y vuelve a desplegar.
-   Ese contacto será intensidad 1.0; el roce más leve que se detecta (15 MΩ) es 0.
+   Ese contacto será intensidad 1.0; el roce más leve que se detecta (33 MΩ) es 0.
+   Valor actual: **0,8 µS**, medido con las puntas metálicas de los cables
+   (una persona pellizcando: suave 0,1–0,3 µS, fuerte 0,4–0,65 µS). Con
+   electrodos grandes o palmas sube mucho (hasta ~10 µS): recalibra.
+4. Arranca la Pico **sin tocar los electrodos**: el primer segundo aprende la
+   conductancia de reposo (carga del propio ADC, ~0,07 µS) y la resta siempre.
    Si alguien consigue un contacto mejor de forma sostenida (>3 s), el techo se
    estira solo y vuelve a su valor en unos minutos; un pico suelto se ignora.
 
@@ -145,6 +150,17 @@ touchsynth/app.py         CLI, stream de audio, medidor en terminal
 
 Tests: `pipenv run python -m pytest -q` (incluye el firmware ejecutado con
 hardware simulado).
+
+## Verificado en el hardware real (Pico 2, 2026-10-09)
+
+- Diagnóstico del montaje original: GP26 leía igual que un pin sin conectar
+  (~0,76 V): el sensor nunca llegaba al ADC. Con el cableado correcto, en reposo
+  0 falsos contactos en minutos de grabación; detección y suelta en < 100 ms.
+- Sesión en vivo con la Pico: al pasar de contacto suave a firme la intensidad
+  va de 0,45 a 0,88, el nivel de −41 a −17 dB y el centroide de 377 a ~1000 Hz.
+- Una sesión real grabada es test de regresión (`tests/test_real_session.py`).
+  Para reanalizar cualquier sesión y escucharla:
+  `PYTHONPATH=. pipenv run python tools/replay_session.py sessions/X.csv out.wav`.
 
 ## Problemas frecuentes
 
