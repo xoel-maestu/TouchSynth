@@ -49,6 +49,16 @@ brillante, con más capas y presencia; golpe rápido → "florecimiento" de bril
 GND pin 38 ────────────────────────────────────── electrodo B  (persona B)
 ```
 
+Contando filas en la protoboard (USB arriba, columna derecha de la Pico): si el
+primer pin junto al USB (VBUS, pin 40) está en la fila N → GND = N+2,
+3V3(OUT) = N+4, AGND = N+7, **GP26 = N+9**. No conectes nada a N (5 V) ni a N+3
+(3V3_EN apaga la placa).
+
+**Comprobación del cableado:** copia `tools/wiring_check.py` como `code.py`.
+Sin tocar, GP26 debe leer ≈ 3,3 V; si lee lo mismo que GP27 (~0,76 V) es que
+GP26 está al aire (era el fallo del montaje original: el sensor nunca llegaba
+al pin, por eso el sonido no variaba).
+
 - Cada persona **agarra su electrodo con toda la mano** (o pulsera): así la
   resistencia de agarre es baja y constante y lo que varía es el contacto entre
   ellas.
