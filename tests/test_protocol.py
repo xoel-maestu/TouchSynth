@@ -14,3 +14,8 @@ def test_ignores_comments_blank_and_garbage():
     for line in ["# touchsynth v1", "", "   ", "abc", "1,2,3", "1,2,x,4,0",
                  "Traceback (most recent call last):"]:
         assert parse_line(line) is None
+
+
+def test_rejects_non_finite_values():
+    assert parse_line("10,60000,nan,0.5,1") is None
+    assert parse_line("10,60000,0.1,inf,1") is None

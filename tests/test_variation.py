@@ -112,3 +112,11 @@ def test_timbre_position_stays_on_the_palette_circle():
     for i in range(50):
         v.on_touch(1.0, i * 2.0, rested_s=1.0)
         assert 0.0 <= v.current(i * 2.0 + 1.0)[0] < PALETTE_SIZE
+
+
+def test_steps_from_the_ends_of_the_scale_bounce_back_inside():
+    top = len(SCALE_ROOTS_HZ) - 1
+    for seed in range(50):
+        v = Variation(seed=seed)
+        for degree_now, size in ((0, 1), (0, 2), (top, 1), (top, 2)):
+            assert v._step(degree_now, size) != degree_now

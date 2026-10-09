@@ -3,6 +3,7 @@
 Lines starting with '#' are comments (the firmware announces itself with one).
 """
 
+import math
 from typing import NamedTuple, Optional
 
 
@@ -23,7 +24,8 @@ def parse_line(line: str) -> Optional[Reading]:
     if len(fields) != 5:
         return None
     try:
-        return Reading(int(fields[0]), int(fields[1]), float(fields[2]),
-                       float(fields[3]), fields[4] == "1")
+        reading = Reading(int(fields[0]), int(fields[1]), float(fields[2]),
+                          float(fields[3]), fields[4] == "1")
     except ValueError:
         return None
+    return reading if math.isfinite(reading.g_us) and math.isfinite(reading.intensity) else None

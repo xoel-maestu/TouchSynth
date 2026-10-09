@@ -1,9 +1,10 @@
 # TouchSynth
 
 Instrumento táctil para dos personas: cada una sujeta un electrodo y, al tocarse
-piel con piel, suena un pad ambiental continuo que **cambia con la intensidad del
-contacto** (roce de un dedo → suave, oscuro y lejano; palma firme → fuerte,
-brillante, con más capas y presencia; golpe rápido → "florecimiento" de brillo).
+piel con piel, suena un pad ambiental continuo que **responde a cómo os tocáis**:
+suave o fuerte, rápido o lento, más o menos contacto, temblando o quieto,
+soltando de golpe o despacio. El timbre se transforma y las notas recorren una
+escala pentatónica con cada toque, así que nunca suena siempre igual.
 
 ```
  Persona A ── electrodo A ─┐                      ┌─ Pico 2 ── USB ── PC (Python)
@@ -23,8 +24,8 @@ brillante, con más capas y presencia; golpe rápido → "florecimiento" de bril
 3. **Zumbido de red (50 Hz) y ADC de alta impedancia** sin condensador ni
    promediado: el ruido tapaba las diferencias finas.
 4. **Pad demasiado grave y con pocos armónicos.** Por encima de ~900 Hz el filtro
-   no tenía nada que abrir, y 55 Hz no se oye en altavoces pequeños. Ahora la
-   raíz es La2 (110 Hz) con 32 armónicos.
+   no tenía nada que abrir, y 55 Hz no se oye en altavoces pequeños. Ahora las
+   notas van de Sol2 a Mi4 con 32 armónicos.
 5. pyo estaba roto en el entorno (`libjack` ausente). Se sustituye por numpy +
    sounddevice (PipeWire/ALSA). Los scripts antiguos están en `legacy/` (necesitan pyo).
 
@@ -106,34 +107,51 @@ pipenv install                       # una vez
 pipenv run python -m touchsynth      # detecta la Pico sola (y la espera si no está)
 pipenv run python -m touchsynth --simulate     # sin hardware: gesto de prueba
 pipenv run python -m touchsynth --port /dev/ttyACM0 --volume 0.5 --device pipewire
+pipenv run python -m touchsynth --speakers full  # auriculares / equipo con graves
 pipenv run python -m touchsynth --list-devices  # salidas de audio disponibles
 ```
+
+`--speakers small` (por defecto) es seguro en pantallas, portátiles y altavoces
+pequeños: corta los graves que no pueden reproducir (filtro de 120 Hz, sin
+subgrave). La salida lleva un limitador a −3 dBFS en cualquier caso.
 
 Cada sesión se graba en `sessions/AAAAMMDD-HHMMSS.csv`
 (`host_s,ms,raw,g_us,intensity,touched`) salvo con `--no-record`.
 
-Escuchar sin hardware ni tarjeta de sonido:
-`PYTHONPATH=. pipenv run python tools/render_simulation.py demo.wav`.
+Escuchar sin hardware ni tarjeta de sonido, o reescuchar una sesión grabada:
 
-## Cómo suena la intensidad (mapeo)
+```bash
+PYTHONPATH=. pipenv run python tools/render.py --simulate demo.wav
+PYTHONPATH=. pipenv run python tools/render.py sessions/X.csv out.wav
+PYTHONPATH=. pipenv run python tools/evaluate_sessions.py sessions/*.csv  # criterios objetivos
+```
 
-| Parámetro | Curva | Roce → palma firme |
+## Cómo responde al gesto
+
+Cada rasgo del gesto mueve su propia dimensión del sonido (para que no se pisen):
+
+| Gesto | Cómo se mide | Qué cambia |
 |---|---|---|
-| Volumen | dB lineal | −24 dB → 0 dB |
-| Filtro (brillo) | exponencial | 150 Hz → 4 kHz |
-| Capa de quinta / octava | fundido de igual potencia | entran a partir de 0,25 / 0,55 |
-| Desafinado (anchura) | exponencial | ±3 → ±18 cents |
-| Saturación (calidez) | dB lineal | 0 → +12 dB |
-| Movimiento (LFO) | exponencial | 0,08 → 0,6 Hz |
-| Reverb | lineal inversa | lejana (0,5) → presente (0,25) |
-| Golpe rápido | velocidad > 3/s | +1 octava de brillo que decae en 250 ms |
+| **Más / menos contacto** | intensidad (log de la conductancia) | volumen −30…0 dB, brillo 100 Hz → 8 kHz, capas de quinta y octava, saturación, reverb (lejos → cerca) |
+| **Golpe rápido / toque lento** | velocidad en los primeros 40 ms (10–35 /s) | ataque 120 → 5 ms, ráfaga de ruido, destello de brillo (+1,5 oct, +9 dB de saturación, 150 ms) |
+| **Apretar / aflojar** | intensidad sobre una base lenta por toque (ignora la deriva del sudor) | anchura estéreo y desafinado |
+| **Temblar** | variación de 3+ Hz en 300 ms | vibrato 0–20 cents |
+| **Mantener** | duración del contacto | capa brillante dos octavas arriba que crece (τ 8 s) |
+| **Soltar de golpe / despacio** | tiempo de caída antes de soltar | cola de 0,35 a 3 s; al soltar de golpe, impulso de reverb |
 
-Al soltar, el timbre se mantiene y el volumen se desvanece en ~2 s (también si
-se desconecta el cable: nunca se queda sonando).
+**Timbre y notas (variación):**
 
-Medido en el render de la simulación (`tools/render_simulation.py`): de roce a
-palma firme el nivel sube de ≈ −40 a ≈ −15 dBFS y el centroide espectral de
-≈ 310 a ≈ 1100 Hz.
+- El timbre se mueve por una paleta circular (flauta → cálido → hueco/clarinete
+  → coral "aa" → coral "uu"), deriva despacio y cada toque lo empuja (más lejos
+  cuanto más fuerte el golpe), siempre deslizándose.
+- Cada nuevo toque da un paso melódico (1 grado, 2 si el golpe es fuerte) por
+  una pentatónica de dos octavas (Sol2–Mi4) con portamento de 50 ms; tras una
+  pausa de más de 4 s vuelve a la octava grave. Los microcortes de contacto
+  (< 150 ms) no cambian nada.
+
+El primer toque se detecta en una ventana de 20 ms y el soltar en dos;
+presión y aflojado se reflejan en ~40 ms. Si se desconecta el cable, el sonido
+se desvanece (nunca se queda sonando).
 
 ## Arquitectura
 
@@ -141,11 +159,16 @@ palma firme el nivel sube de ≈ −40 a ≈ −15 dBFS y el centroide espectral
 firmware/code.py          Pico: ventanas de 20 ms (cancela 50 Hz) → touchcore → USB serie
 firmware/lib/touchcore.py conductancia, escala log adaptativa, histéresis (también se testea en PC)
 touchsynth/sources.py     lector serie con reconexión / simulador
-touchsynth/controller.py  filtro 1€, envolventes, gate y "bloom" (hilo lector → callback sin locks)
-touchsynth/mapping.py     intensidad → parámetros (curvas perceptuales)
-touchsynth/synth.py       pad aditivo con lowpass analítico + reverb FDN, rampas por bloque
+touchsynth/gestures.py    rasgos del gesto: golpe, presión, temblor, caída al soltar, duración
+touchsynth/variation.py   paleta de timbres y paseo melódico pentatónico
+touchsynth/controller.py  gestos + variación → parámetros y envolventes (hilo lector → callback sin locks)
+touchsynth/mapping.py     gesto → parámetros del sintetizador (curvas perceptuales)
+touchsynth/synth.py       pad aditivo (paleta de timbres, lowpass analítico) + reverb FDN
+touchsynth/output.py      paso-alto según altavoz + limitador de picos
+touchsynth/replay.py      render offline de lecturas (sesiones, simulación)
 touchsynth/recorder.py    CSV de sesión
 touchsynth/app.py         CLI, stream de audio, medidor en terminal
+tools/                    despliegue, comprobación de cableado, render y evaluación de sesiones
 ```
 
 Tests: `pipenv run python -m pytest -q` (incluye el firmware ejecutado con
@@ -156,11 +179,13 @@ hardware simulado).
 - Diagnóstico del montaje original: GP26 leía igual que un pin sin conectar
   (~0,76 V): el sensor nunca llegaba al ADC. Con el cableado correcto, en reposo
   0 falsos contactos en minutos de grabación; detección y suelta en < 100 ms.
-- Sesión en vivo con la Pico: al pasar de contacto suave a firme la intensidad
-  va de 0,45 a 0,88, el nivel de −41 a −17 dB y el centroide de 377 a ~1000 Hz.
+- Tres sesiones reales tocando (v1.0–v1.2) pasan los 8 criterios de
+  `tools/evaluate_sessions.py` con el motor final: sin clipping, 12–17 dB de
+  rango de volumen, brillo ×7–11, vibrato usado sin saturar, anchura variable,
+  4–5 colores de timbre, 6–9 notas distintas y 100 % de pasos melódicos.
+- Audio: con bloques de 512 muestras, 0–5 underflows en 150 s (con 256 eran
+  cientos). Latencia de control ~40 ms, ataque en un golpe ~10 ms.
 - Una sesión real grabada es test de regresión (`tests/test_real_session.py`).
-  Para reanalizar cualquier sesión y escucharla:
-  `PYTHONPATH=. pipenv run python tools/replay_session.py sessions/X.csv out.wav`.
 
 ## Problemas frecuentes
 

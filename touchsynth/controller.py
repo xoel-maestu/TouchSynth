@@ -67,6 +67,8 @@ class TouchController:
         g, s = self._gesture, self._state
         g.update(intensity, touched, now_s)
         level, gate, lift, hold = s.level, s.gate, s.lift, s.hold_s
+        if now_s - s.last_update > STALE_AFTER_S and gate.target == 1.0:
+            gate = _Envelope(self._gate_at(s, s.last_update, now_s), 1.0, gate.tau, now_s)
         if touched:
             if g.onset_time == now_s:
                 self._level.value = None  # start from the first reading, not from 0
@@ -83,12 +85,17 @@ class TouchController:
         self._state = _State(level, gate, g.strike, g.onset_time, g.tremor, g.press,
                              hold, lift, g.release_time, now_s)
 
-    def current(self, now_s: float) -> tuple[SynthParams, float]:
-        s = self._state
+    @staticmethod
+    def _gate_at(s: _State, last_update: float, now_s: float) -> float:
         gate = s.gate.at(now_s)
-        silence = now_s - s.last_update - STALE_AFTER_S
+        silence = now_s - last_update - STALE_AFTER_S
         if silence > 0 and s.gate.target == 1.0:  # readings stopped mid-touch
             gate *= math.exp(-silence / STALE_RELEASE_S)
+        return gate
+
+    def current(self, now_s: float) -> tuple[SynthParams, float]:
+        s = self._state
+        gate = self._gate_at(s, s.last_update, now_s)
         since_onset = max(0.0, now_s - s.onset)
         timbre, root_hz = self._variation.current(now_s)
         params = map_intensity(

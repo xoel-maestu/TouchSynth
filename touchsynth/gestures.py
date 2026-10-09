@@ -30,7 +30,8 @@ class GestureTracker:
         self._hp_a = 1.0 / (1.0 + 2 * math.pi * TREMOR_HIGHPASS_HZ * self.dt)
         self._rms_a = 1.0 - math.exp(-self.dt / TREMOR_WINDOW_S)
         self.touched = False
-        self.onset_time = self.release_time = self.last_time = 0.0
+        self.onset_time = self.release_time = -1e9  # "long ago"
+        self.last_time = 0.0
         self.strike = self.fall_time = 0.0
         self._baseline = self._x = self._hp = self._hp_in = self._power = 0.0
         self._history = deque()

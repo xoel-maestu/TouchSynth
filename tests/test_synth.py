@@ -231,3 +231,14 @@ def test_root_note_sets_the_pitch():
     spec = np.abs(np.fft.rfft(mono * np.hanning(len(mono))))
     f = np.fft.rfftfreq(len(mono), 1 / FS)
     assert abs(f[(f > 120) & (f < 200)][np.argmax(spec[(f > 120) & (f < 200)])] - 146.83) < 2
+
+
+def test_zero_length_blocks_are_harmless():
+    out = PadSynth(FS).render(0, map_intensity(0.5), 1.0)
+    assert out.shape == (0, 2)
+
+
+def test_small_speakers_skip_the_sub_oscillator():
+    from touchsynth.synth import PadSynth as P
+    assert P(FS, speakers="small").sub_enabled is False
+    assert P(FS, speakers="full").sub_enabled is True

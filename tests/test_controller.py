@@ -124,3 +124,21 @@ def test_retouching_plays_a_new_note_but_a_contact_glitch_does_not():
     assert ctrl.current(t)[0].root_hz == pytest.approx(first, rel=1e-6)
     t = play(ctrl, [0.6] * 50, rest(ctrl, 0.5, t))   # a real re-touch
     assert ctrl.current(t)[0].root_hz != pytest.approx(first, rel=1e-3)
+
+
+def test_gate_recovers_smoothly_when_readings_resume():
+    ctrl = TouchController(RATE)
+    t = play(ctrl, [0.8] * 50, rest(ctrl, 0.5))
+    t += 1.0                                   # readings stall for 1 s mid-touch
+    dipped = gate(ctrl, t)
+    play(ctrl, [0.8], t)
+    assert gate(ctrl, t + 0.011) < dipped + 0.5 * (1 - dipped)
+
+
+def test_a_touch_right_at_startup_counts():
+    from tests.test_variation import circular
+    touched, untouched = TouchController(RATE, seed=3), TouchController(RATE, seed=3)
+    for ctrl in (touched, untouched):
+        rest(ctrl, 0.04)                       # two idle readings after boot...
+    play(touched, [0.9] * 60, 0.04)            # ...then a touch at t = 0.06 s
+    assert circular(touched.current(1.2)[0].timbre, untouched.current(1.2)[0].timbre) > 0.2

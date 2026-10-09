@@ -2,7 +2,7 @@
 clean on anything from a monitor's tiny speakers to headphones."""
 
 import numpy as np
-from scipy.signal import butter, sosfilt, sosfilt_zi
+from scipy.signal import butter, sosfilt
 
 CEILING = 10 ** (-3 / 20)        # -3 dBFS: headroom for cheap DACs and speakers
 LIMITER_RELEASE_S = 0.15
@@ -16,7 +16,7 @@ class HighPass:
     def __init__(self, sample_rate: int, speakers: str, channels: int = 2):
         order, cutoff = SPEAKER_HIGHPASS[speakers]
         self.sos = butter(order, cutoff, btype="highpass", fs=sample_rate, output="sos")
-        self.state = np.repeat(sosfilt_zi(self.sos)[:, :, None], channels, axis=2) * 0.0
+        self.state = np.zeros((len(self.sos), 2, channels))
 
     def process(self, block: np.ndarray) -> np.ndarray:
         out, self.state = sosfilt(self.sos, block, axis=0, zi=self.state)
@@ -33,7 +33,9 @@ class PeakLimiter:
 
     def process(self, block: np.ndarray) -> np.ndarray:
         n = len(block)
-        peak = float(np.max(np.abs(block))) if n else 0.0
+        if n == 0:
+            return block
+        peak = float(np.max(np.abs(block)))
         target = min(1.0, self.ceiling / peak) if peak > 0 else 1.0
         if target < self.gain:  # attack: reach the new gain within a few samples
             ramp = np.full(n, target)

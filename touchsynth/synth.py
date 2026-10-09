@@ -51,7 +51,7 @@ def timbre_weights(k: np.ndarray, fk: np.ndarray, position: float) -> np.ndarray
 
 
 class _Voice:
-    """Phase-continuous additive oscillator with sawtooth-like harmonics."""
+    """Phase-continuous additive oscillator; harmonic weights come from the timbre palette."""
 
     def __init__(self, sample_rate: int, ratio: float, harmonics: int):
         self.sample_rate = sample_rate
@@ -114,8 +114,8 @@ def _pan_gains(spread: np.ndarray, width: float) -> np.ndarray:
 
 
 class PadSynth:
-    # A2 root: audible on small speakers; 32 harmonics reach 3.5 kHz (7 kHz on the
-    # octave layer, 14 kHz on the shimmer), so the cutoff sweep is heard to the top.
+    # Roots G2..E4 (variation.py); 32 harmonics reach >3 kHz on the root voices and
+    # more on the octave/shimmer layers, so the cutoff sweep is heard to the top.
     def __init__(self, sample_rate: int = 48000, harmonics: int = 32,
                  reverb: bool = True, speakers: str = "small"):
         self.sample_rate = sample_rate
@@ -132,12 +132,15 @@ class PadSynth:
         self._noise_state = np.zeros(1)
         self.reverb = FdnReverb(sample_rate) if reverb else None
         self.highpass = HighPass(sample_rate, speakers)
+        self.sub_enabled = speakers == "full"  # small speakers cannot play it anyway
         self.limiter = PeakLimiter(sample_rate)
         self._prev = None
         self._prev_gate = 0.0
         self._prev_f0 = None
 
     def render(self, n: int, params: SynthParams, gate: float) -> np.ndarray:
+        if n == 0:
+            return np.zeros((0, 2))
         prev = self._prev or params
         if self._prev_f0 is None:
             self._prev_f0 = [params.root_hz * v.ratio for v in self.voices]
@@ -169,10 +172,11 @@ class PadSynth:
                                                zi=self._noise_state)
             out += (noise * NOISE_LEVEL * lerp(prev.noise_gain, params.noise_gain))[:, None]
 
-        sub_phases = self.sub_phase + np.cumsum(lerp(prev.root_hz, params.root_hz) / 2) / self.sample_rate
-        self.sub_phase = sub_phases[-1] % 1.0
-        sub = np.sin(2 * np.pi * sub_phases) * lerp(prev.sub_gain, params.sub_gain)
-        out += sub[:, None] * np.sqrt(0.5)
+        if self.sub_enabled:
+            sub_phases = self.sub_phase + np.cumsum(lerp(prev.root_hz, params.root_hz) / 2) / self.sample_rate
+            self.sub_phase = sub_phases[-1] % 1.0
+            sub = np.sin(2 * np.pi * sub_phases) * lerp(prev.sub_gain, params.sub_gain)
+            out += sub[:, None] * np.sqrt(0.5)
 
         lfo_phases = self.lfo_phase + np.cumsum(lerp(prev.lfo_hz, params.lfo_hz)) / self.sample_rate
         self.lfo_phase = lfo_phases[-1] % 1.0

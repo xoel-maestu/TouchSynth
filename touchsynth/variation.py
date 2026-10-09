@@ -65,8 +65,10 @@ class Variation:
     def _step(self, degree: int, size: int) -> int:
         top = len(SCALE_ROOTS_HZ) - 1
         up_chance = 0.5 - 0.4 * (degree - top / 2) / (top / 2)  # lean back to the middle
-        up = self._rng.random() < up_chance
-        return max(0, min(top, degree + (size if up else -size)))
+        step = size if self._rng.random() < up_chance else -size
+        if not 0 <= degree + step <= top:  # bounce off the ends of the scale
+            step = -step
+        return degree + step
 
     @staticmethod
     def _root(s: _State, now: float) -> float:
