@@ -28,6 +28,9 @@ def parse_args(argv):
     p.add_argument("--port", help="serial port of the Pico (auto-detected by default)")
     p.add_argument("--volume", type=float, default=0.7, help="master volume 0..1")
     p.add_argument("--device", help="audio output device (name or index, see --list-devices)")
+    p.add_argument("--speakers", choices=("small", "full"), default="small",
+                   help="small: monitor/laptop speakers (no deep bass, default); "
+                        "full: headphones or hi-fi")
     p.add_argument("--list-devices", action="store_true", help="list audio devices and exit")
     p.add_argument("--no-record", action="store_true", help="do not write a session CSV")
     return p.parse_args(argv)
@@ -55,7 +58,7 @@ def main(argv=None) -> int:
         return 0
 
     controller = TouchController(UPDATE_HZ)
-    synth = PadSynth(SAMPLE_RATE)
+    synth = PadSynth(SAMPLE_RATE, speakers=args.speakers)
     volume = max(0.0, min(1.0, args.volume))
     device = int(args.device) if args.device and args.device.isdigit() else args.device
     recorder = None if args.no_record else open_recorder()

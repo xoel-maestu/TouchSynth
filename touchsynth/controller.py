@@ -12,6 +12,7 @@ from typing import NamedTuple
 from touchsynth.gestures import GestureTracker
 from touchsynth.mapping import SynthParams, map_intensity
 from touchsynth.smoothing import OneEuroFilter
+from touchsynth.variation import Variation
 
 ATTACK_SLOW_S, ATTACK_FAST_S = 0.12, 0.005   # gate attack: soft touch .. slap
 RELEASE_MIN_S, RELEASE_MAX_S = 0.35, 3.0     # gate release follows how slowly you let go
@@ -50,8 +51,9 @@ class _State(NamedTuple):
 
 
 class TouchController:
-    def __init__(self, rate_hz: float):
+    def __init__(self, rate_hz: float, seed=None):
         self._gesture = GestureTracker(rate_hz)
+        self._variation = Variation(seed)
         # light smoothing only: the real sensor is quiet (steady-hold std ~0.002)
         self._level = OneEuroFilter(rate_hz, mincutoff=4.0, beta=5.0, dcutoff=5.0)
         self._state = _State(0.0, _Envelope(0.0, 0.0, 1.0, 0.0),
@@ -68,6 +70,7 @@ class TouchController:
         if touched:
             if g.onset_time == now_s:
                 self._level.value = None  # start from the first reading, not from 0
+                self._variation.on_touch(g.strike, now_s, rested_s=now_s - s.release)
             level = self._level(intensity)
             hold = g.hold_s
             attack = ATTACK_SLOW_S * (ATTACK_FAST_S / ATTACK_SLOW_S) ** g.strike
@@ -87,11 +90,13 @@ class TouchController:
         if silence > 0 and s.gate.target == 1.0:  # readings stopped mid-touch
             gate *= math.exp(-silence / STALE_RELEASE_S)
         since_onset = max(0.0, now_s - s.onset)
+        timbre, root_hz = self._variation.current(now_s)
         params = map_intensity(
             s.level,
             bloom=s.strike * math.exp(-since_onset / BLOOM_DECAY_S),
             transient=s.strike * math.exp(-since_onset / TRANSIENT_DECAY_S),
             tremor=s.tremor, press=s.press, hold_s=s.hold_s,
             reverb_boost=s.lift * math.exp(-max(0.0, now_s - s.release) / LIFT_REVERB_DECAY_S),
+            timbre=timbre, root_hz=root_hz,
         )
         return params, gate

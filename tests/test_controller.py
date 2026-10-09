@@ -105,3 +105,22 @@ def test_gate_fades_out_when_readings_stop_mid_touch():
     t = play(ctrl, [0.8] * 50, rest(ctrl, 0.5))  # then the cable is pulled
     assert gate(ctrl, t + 0.1) > 0.9
     assert gate(ctrl, t + 5.0) < 0.2
+
+
+def test_each_touch_moves_the_timbre():
+    from tests.test_variation import circular
+    ctrl = TouchController(RATE, seed=1)
+    t = rest(ctrl, 0.5)
+    before = ctrl.current(t)[0].timbre
+    t = play(ctrl, [0.8] * 100, t)  # a slap, held 2 s
+    assert circular(ctrl.current(t)[0].timbre, before) > 0.5
+
+
+def test_a_long_pause_changes_the_note():
+    ctrl = TouchController(RATE, seed=2)
+    t = play(ctrl, [0.6] * 50, rest(ctrl, 0.5))
+    first = ctrl.current(t)[0].root_hz
+    t = play(ctrl, [0.6] * 50, rest(ctrl, 1.0, t))   # short pause: same note
+    assert ctrl.current(t)[0].root_hz == first
+    t = play(ctrl, [0.6] * 50, rest(ctrl, 6.0, t))   # long pause: new note
+    assert ctrl.current(t)[0].root_hz != first

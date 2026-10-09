@@ -5,18 +5,49 @@ is band-limited by construction and has no recursive filter state to click
 when the cutoff moves. Every parameter is ramped linearly across the block.
 """
 
+import math
+
 import numpy as np
 from scipy.signal import lfilter
 
 from touchsynth.mapping import SynthParams
+from touchsynth.output import HighPass, PeakLimiter
 
 FILTER_ORDER = 2  # 12 dB/oct on top of the 1/k harmonic slope
-OUTPUT_GAIN = 2.0  # light touch ~ -40 dBFS RMS, firm ~ -16 dBFS RMS, peak < 0.9
+OUTPUT_GAIN = 2.0  # light touch ~ -40 dBFS RMS, firm ~ -16 dBFS RMS; the limiter catches peaks
 MIX_LEVEL = 0.15  # full intensity: mix peak ~2.2 x drive 4 x 0.15 ~ 1.3 into tanh = warmth, not fuzz
 VIBRATO_HZ = 5.5
 SHIMMER = 5         # index of the two-octaves-up voice in the layout
 SHIMMER_AIR = 2.0   # it is filtered an octave above the pad: "air"
 NOISE_LEVEL = 1.5  # strike burst, before the saturator (it is lowpassed at the pad cutoff)
+
+
+def _formants(fk: np.ndarray, centres: tuple) -> np.ndarray:
+    return 0.1 + sum(np.exp(-((fk - f) / (0.12 * f + 50.0)) ** 2) for f in centres)
+
+
+# Tone colours the timbre glides between (harmonic number k, harmonic frequency fk).
+TIMBRES = (
+    lambda k, fk: 1.0 / k ** 2,                                  # flute: soft, few overtones
+    lambda k, fk: 1.0 / k,                                       # warm: sawtooth-like
+    lambda k, fk: np.where(k % 2 == 1, 1.0 / k, 0.04 / k),       # hollow: clarinet, odd only
+    lambda k, fk: _formants(fk, (700, 1220, 2600)) / k ** 0.5,   # choir "ah"
+    lambda k, fk: _formants(fk, (300, 870, 2240)) / k ** 0.5,    # choir "oo"
+)
+
+
+def timbre_weights(k: np.ndarray, fk: np.ndarray, position: float) -> np.ndarray:
+    """Harmonic weights for a point between two neighbouring palette colours,
+    each normalised to the power of the 'warm' colour so morphing keeps loudness."""
+    reference = np.sqrt(np.sum((1.0 / k) ** 2))
+    lower = math.floor(position)
+    blend = position - lower
+
+    def colour(i):
+        w = TIMBRES[i % len(TIMBRES)](k, fk)
+        return w * (reference / np.sqrt(np.sum(w ** 2)))
+
+    return (1.0 - blend) * colour(lower) + blend * colour(lower + 1)
 
 
 class _Voice:
@@ -29,18 +60,18 @@ class _Voice:
         self.phase = np.random.default_rng(int(ratio * 1000)).random()
         self.amps = np.zeros(harmonics)
 
-    def _harmonic_amps(self, f0: float, cutoff_hz: float) -> np.ndarray:
+    def _harmonic_amps(self, f0: float, cutoff_hz: float, timbre: float) -> np.ndarray:
         fk = self.k * f0
-        amps = (1.0 / self.k) / np.sqrt(1.0 + (fk / cutoff_hz) ** (2 * FILTER_ORDER))
+        amps = timbre_weights(self.k, fk, timbre) / np.sqrt(1.0 + (fk / cutoff_hz) ** (2 * FILTER_ORDER))
         amps[fk > 0.45 * self.sample_rate] = 0.0
         return amps
 
     def render(self, ramp: np.ndarray, f0_start: float, f0_end: float,
-               cutoff_hz: float, pitch_mod: np.ndarray) -> np.ndarray:
+               cutoff_hz: float, pitch_mod: np.ndarray, timbre: float) -> np.ndarray:
         f0 = (f0_start + (f0_end - f0_start) * ramp) * pitch_mod
         phases = self.phase + np.cumsum(f0) / self.sample_rate
         self.phase = phases[-1] % 1.0
-        new_amps = self._harmonic_amps(f0_end, cutoff_hz)
+        new_amps = self._harmonic_amps(f0_end, cutoff_hz, timbre)
         amps = self.amps + np.outer(ramp, new_amps - self.amps)
         self.amps = new_amps
         return np.sum(amps * np.sin(2 * np.pi * np.outer(phases % 1.0, self.k)), axis=1)
@@ -85,10 +116,9 @@ def _pan_gains(spread: np.ndarray, width: float) -> np.ndarray:
 class PadSynth:
     # A2 root: audible on small speakers; 32 harmonics reach 3.5 kHz (7 kHz on the
     # octave layer, 14 kHz on the shimmer), so the cutoff sweep is heard to the top.
-    def __init__(self, sample_rate: int = 48000, root_hz: float = 110.0,
-                 harmonics: int = 32, reverb: bool = True):
+    def __init__(self, sample_rate: int = 48000, harmonics: int = 32,
+                 reverb: bool = True, speakers: str = "small"):
         self.sample_rate = sample_rate
-        self.root_hz = root_hz
         # (pitch ratio to root, detune sign, pan -1=L..1=R at full width)
         layout = [(1.0, -1, -1.0), (1.0, 0, 0.0), (1.0, 1, 1.0),
                   (1.5, 0, -0.5), (2.0, 0, 0.5), (4.0, 0, 0.0)]  # 4.0: shimmer
@@ -101,12 +131,16 @@ class PadSynth:
         self._noise = np.random.default_rng(7)
         self._noise_state = np.zeros(1)
         self.reverb = FdnReverb(sample_rate) if reverb else None
+        self.highpass = HighPass(sample_rate, speakers)
+        self.limiter = PeakLimiter(sample_rate)
         self._prev = None
         self._prev_gate = 0.0
-        self._prev_f0 = [root_hz * r for r, _, _ in layout]
+        self._prev_f0 = None
 
     def render(self, n: int, params: SynthParams, gate: float) -> np.ndarray:
         prev = self._prev or params
+        if self._prev_f0 is None:
+            self._prev_f0 = [params.root_hz * v.ratio for v in self.voices]
         ramp = np.arange(1, n + 1) / n
 
         def lerp(a, b):
@@ -122,9 +156,9 @@ class PadSynth:
         prev_layer_gain = [1 / 3, 1 / 3, 1 / 3, prev.fifth_gain, prev.octave_gain, prev.shimmer_gain]
         pans_now, pans_prev = _pan_gains(self.pan_spread, params.width), _pan_gains(self.pan_spread, prev.width)
         for i, voice in enumerate(self.voices):
-            f0 = self.root_hz * voice.ratio * 2 ** (self.detune_signs[i] * params.detune_cents / 1200)
+            f0 = params.root_hz * voice.ratio * 2 ** (self.detune_signs[i] * params.detune_cents / 1200)
             cutoff = params.cutoff_hz * (SHIMMER_AIR if i == SHIMMER else 1.0)
-            signal = voice.render(ramp, self._prev_f0[i], f0, cutoff, pitch_mod)
+            signal = voice.render(ramp, self._prev_f0[i], f0, cutoff, pitch_mod, params.timbre)
             self._prev_f0[i] = f0
             signal *= lerp(prev_layer_gain[i], layer_gain[i])
             out += signal[:, None] * (pans_prev[i] + np.outer(ramp, pans_now[i] - pans_prev[i]))
@@ -135,7 +169,7 @@ class PadSynth:
                                                zi=self._noise_state)
             out += (noise * NOISE_LEVEL * lerp(prev.noise_gain, params.noise_gain))[:, None]
 
-        sub_phases = self.sub_phase + np.arange(1, n + 1) * (self.root_hz / 2) / self.sample_rate
+        sub_phases = self.sub_phase + np.cumsum(lerp(prev.root_hz, params.root_hz) / 2) / self.sample_rate
         self.sub_phase = sub_phases[-1] % 1.0
         sub = np.sin(2 * np.pi * sub_phases) * lerp(prev.sub_gain, params.sub_gain)
         out += sub[:, None] * np.sqrt(0.5)
@@ -156,4 +190,4 @@ class PadSynth:
             out = out * (1 - wet) + self.reverb.process(out.mean(axis=1)) * wet * 2
 
         self._prev, self._prev_gate = params, gate
-        return np.clip(out * OUTPUT_GAIN, -1.0, 1.0)
+        return self.limiter.process(self.highpass.process(out * OUTPUT_GAIN))

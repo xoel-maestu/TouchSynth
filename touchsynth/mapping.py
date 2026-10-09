@@ -23,6 +23,8 @@ class SynthParams:
     width: float = 0.5          # stereo spread of the voices, 0..1 (from press)
     shimmer_gain: float = 0.0   # two-octaves-up layer that grows on long holds
     noise_gain: float = 0.0     # percussive noise burst on strikes
+    timbre: float = 1.0         # position on the tone-colour palette (synth.TIMBRES)
+    root_hz: float = 110.0      # root note of the pad
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -49,12 +51,13 @@ def _fade_in(x: float, start: float, end: float, top_db: float) -> float:
 
 def map_intensity(x: float, bloom: float = 0.0, *, tremor: float = 0.0,
                   press: float = 0.0, hold_s: float = 0.0, transient: float = 0.0,
-                  reverb_boost: float = 0.0) -> SynthParams:
+                  reverb_boost: float = 0.0, timbre: float = 1.0,
+                  root_hz: float = 110.0) -> SynthParams:
     """Map touch intensity x (0..1) plus gesture expression to synth parameters.
 
     bloom/transient: decaying strike envelopes (0..1); tremor: 0..1; press:
     intensity above the per-touch baseline; hold_s: contact duration;
-    reverb_boost: decaying lift envelope.
+    reverb_boost: decaying lift envelope; timbre and root_hz come from Variation.
     """
     x = _clamp(x)
     bloom = _clamp(bloom)
@@ -73,4 +76,6 @@ def map_intensity(x: float, bloom: float = 0.0, *, tremor: float = 0.0,
         width=_clamp(0.3 + 0.3 * x + 0.6 * squeeze),
         shimmer_gain=0.5 * (1.0 - math.exp(-max(0.0, hold_s) / 8.0)) * math.sqrt(x),
         noise_gain=_clamp(transient),
+        timbre=timbre,
+        root_hz=root_hz,
     )
