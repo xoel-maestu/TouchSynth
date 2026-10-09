@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+sessions/
+*.uf2
+Raspberry_Pi_Pico2_files/
