@@ -23,7 +23,7 @@ def main(path, seconds=24.0):
     while t < seconds:
         while next_reading <= t:
             x, touched = simulated_touch(next_reading)
-            ctrl.update(max(0.0, min(1.0, x)), touched, next_reading)
+            ctrl.update(x, touched, next_reading)
             next_reading += 1 / UPDATE_HZ
         params, gate = ctrl.current(t)
         blocks.append(synth.render(BLOCK, params, gate))
@@ -41,7 +41,7 @@ def main(path, seconds=24.0):
         spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))  # Hann: no leakage floor
         centroid = (spec * np.fft.rfftfreq(len(seg), 1 / SAMPLE_RATE)).sum() / (spec.sum() + 1e-12)
         x, touched = simulated_touch(s + 0.5)
-        print(f"{s:2d}  {'yes' if touched else ' - '}    {max(0, x):5.2f}    {level:7.1f}    {centroid:8.0f}")
+        print(f"{s:2d}  {'yes' if touched else ' - '}    {x:5.2f}    {level:7.1f}    {centroid:8.0f}")
 
 
 if __name__ == "__main__":

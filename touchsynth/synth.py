@@ -10,7 +10,7 @@ from scipy.signal import lfilter
 
 from touchsynth.mapping import SynthParams
 
-FILTER_ORDER = 2  # ~24 dB/oct feel
+FILTER_ORDER = 2  # 12 dB/oct on top of the 1/k harmonic slope
 OUTPUT_GAIN = 2.0  # light touch ~ -40 dBFS RMS, firm ~ -16 dBFS RMS, peak < 0.9
 MIX_LEVEL = 0.15  # full intensity: mix peak ~2.2 x drive 4 x 0.15 ~ 1.3 into tanh = warmth, not fuzz
 
@@ -43,7 +43,7 @@ class _Voice:
 
 
 class FdnReverb:
-    """4-line feedback delay network (Jot); block-vectorised, needs block <= min delay."""
+    """4-line feedback delay network (Jot), processed a block at a time."""
 
     DELAYS = (1499, 1889, 2381, 2999)
     MIX = 0.5 * np.array([[1, 1, 1, 1], [1, -1, 1, -1], [1, 1, -1, -1], [1, -1, -1, 1]])
@@ -56,6 +56,10 @@ class FdnReverb:
         self.damp_state = [np.zeros(1) for _ in self.DELAYS]
 
     def process(self, mono: np.ndarray) -> np.ndarray:
+        limit = min(self.DELAYS)
+        if len(mono) > limit:  # block-vectorised reads need block <= shortest delay
+            return np.concatenate([self.process(mono[i:i + limit])
+                                   for i in range(0, len(mono), limit)])
         n = len(mono)
         idx = [(p + np.arange(n)) % len(line) for p, line in zip(self.pos, self.lines)]
         outs = np.stack([line[i] for line, i in zip(self.lines, idx)])
@@ -69,8 +73,10 @@ class FdnReverb:
 
 
 class PadSynth:
-    def __init__(self, sample_rate: int = 48000, root_hz: float = 55.0,
-                 harmonics: int = 16, reverb: bool = True):
+    # A2 root: audible on small speakers; 32 harmonics reach 3.5 kHz (7 kHz on the
+    # octave layer), so the 150 Hz -> 4 kHz cutoff sweep is heard over its whole range.
+    def __init__(self, sample_rate: int = 48000, root_hz: float = 110.0,
+                 harmonics: int = 32, reverb: bool = True):
         self.sample_rate = sample_rate
         self.root_hz = root_hz
         # (pitch ratio to root, detune sign, pan 0=L..1=R)

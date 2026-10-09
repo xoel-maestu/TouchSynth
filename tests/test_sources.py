@@ -1,5 +1,6 @@
 import io
 import threading
+import time
 import types
 
 from touchsynth.protocol import Reading
@@ -49,7 +50,33 @@ def test_serial_source_delivers_parsed_readings():
     source.start()
     assert done.wait(2.0)
     source.stop()
-    assert received == [Reading(10, 60000, 0.1, 0.08, True), Reading(30, 65535, 0.0, 0.0, False)]
+    assert received[:2] == [Reading(10, 60000, 0.1, 0.08, True),
+                            Reading(30, 65535, 0.0, 0.0, False)]
+
+
+class BrokenSerial(FakeSerial):
+    def readline(self):
+        if self._lines:
+            return super().readline()
+        raise OSError("device disconnected")
+
+
+def test_unplugging_releases_the_touch_and_reconnects():
+    received, opened = [], []
+
+    def opener(port):
+        opened.append(port)
+        return BrokenSerial(["10,60000,0.1000,0.0800,1\r\n"])
+
+    source = SerialSource(None, received.append, opener=opener,
+                          finder=lambda: f"/dev/ttyACM{len(opened)}")
+    source.start()
+    deadline = time.monotonic() + 3.0
+    while len(opened) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    source.stop()
+    assert received[0].touched and not received[1].touched  # released on unplug
+    assert opened[:2] == ["/dev/ttyACM0", "/dev/ttyACM1"]    # found again, new name
 
 
 def test_recorder_writes_header_and_rows():

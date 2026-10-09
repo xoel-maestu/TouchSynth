@@ -16,6 +16,7 @@ INTENSITY_RELEASE_S = 0.3
 BLOOM_THRESHOLD_PER_S = 3.0   # intensity velocity that counts as a "slap"
 BLOOM_FULL_PER_S = 15.0
 BLOOM_DECAY_S = 0.25
+STALE_AFTER_S = 0.25          # no readings for this long (cable pulled): fade out
 
 
 class TouchController:
@@ -25,8 +26,8 @@ class TouchController:
         self._filter(0.0)  # start at rest, so the first touch registers as an onset
         self._intensity = AsymmetricFollower(rate_hz, INTENSITY_ATTACK_S, INTENSITY_RELEASE_S)
         self._gate = AsymmetricFollower(rate_hz, GATE_ATTACK_S, GATE_RELEASE_S)
-        # (intensity, gate, bloom_peak, bloom_time)
-        self._state = (0.0, 0.0, 0.0, 0.0)
+        # (intensity, gate, bloom_peak, bloom_time, last_update_time)
+        self._state = (0.0, 0.0, 0.0, 0.0, 0.0)
 
     @property
     def intensity(self) -> float:
@@ -38,16 +39,19 @@ class TouchController:
             self._intensity(smoothed)
         gate = self._gate(1.0 if touched else 0.0)
 
-        _, _, bloom_peak, bloom_time = self._state
+        _, _, bloom_peak, bloom_time, _ = self._state
         velocity = self._filter.derivative
         if velocity > BLOOM_THRESHOLD_PER_S:
             amount = min(1.0, velocity / BLOOM_FULL_PER_S)
             if amount > _decayed(bloom_peak, bloom_time, now_s):
                 bloom_peak, bloom_time = amount, now_s
-        self._state = (self._intensity.value, gate, bloom_peak, bloom_time)
+        self._state = (self._intensity.value, gate, bloom_peak, bloom_time, now_s)
 
     def current(self, now_s: float) -> tuple[SynthParams, float]:
-        intensity, gate, bloom_peak, bloom_time = self._state
+        intensity, gate, bloom_peak, bloom_time, last_update = self._state
+        silence = now_s - last_update - STALE_AFTER_S
+        if silence > 0:
+            gate *= math.exp(-silence / GATE_RELEASE_S)
         return map_intensity(intensity, _decayed(bloom_peak, bloom_time, now_s)), gate
 
 

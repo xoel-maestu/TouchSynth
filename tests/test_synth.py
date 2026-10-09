@@ -51,6 +51,21 @@ def test_firm_touch_is_brighter_than_light_touch():
     assert spectral_centroid(firm) > 2.0 * spectral_centroid(light)
 
 
+def steady_centroid(x, bloom=0.0):
+    synth = PadSynth(FS, reverb=False)
+    params = map_intensity(x, bloom)
+    out = np.concatenate([synth.render(BLOCK, params, 1.0) for _ in range(100)])
+    return spectral_centroid(out[FS // 2:])
+
+
+def test_brightness_keeps_rising_up_to_full_intensity():
+    assert steady_centroid(1.0) > 1.2 * steady_centroid(0.75)
+
+
+def test_bloom_is_audible_on_firm_slaps():
+    assert steady_centroid(0.9, bloom=1.0) > 1.2 * steady_centroid(0.9)
+
+
 def test_blocks_join_without_clicks():
     synth = PadSynth(FS, reverb=False)
     out = np.concatenate([synth.render(BLOCK, map_intensity(x), 1.0)
@@ -80,6 +95,14 @@ def test_reverb_tail_decays():
     tail = [rms(rev.process(silence)) for _ in range(int(6 * FS / BLOCK))]
     assert max(tail[:20]) > 0.0
     assert tail[-1] < 1e-3 * max(tail[:20])  # > 60 dB down after 6 s (T60 = 2 s)
+
+
+def test_reverb_is_independent_of_block_size():
+    signal = np.random.default_rng(0).standard_normal(6000)
+    small, large = FdnReverb(FS), FdnReverb(FS)
+    out_small = np.concatenate([small.process(signal[i:i + 250]) for i in range(0, 6000, 250)])
+    out_large = np.concatenate([large.process(signal[i:i + 2000]) for i in range(0, 6000, 2000)])
+    assert np.allclose(out_small, out_large)
 
 
 @pytest.mark.parametrize("bloom", [0.0, 1.0])

@@ -2,8 +2,10 @@
 
 Circuit: 3V3 -- R_pullup -- ADC node -- R_series -- electrode A ~ skin ~ electrode B -- GND.
 Skin resistance spans decades (light fingertip ~MΩ, firm palm ~100 kΩ), so the
-intensity is the *logarithm* of the skin conductance, normalised to a range that
-adapts to the people playing.
+intensity is the *logarithm* of the skin conductance between the touch threshold
+and a "firm contact" level. That top level is calibrated (g_max_us); it only
+stretches for sustained stronger contact and relaxes back, so a steady touch
+keeps a steady intensity and one-off spikes are ignored.
 """
 
 import math
@@ -15,9 +17,10 @@ TOUCH_ON_US = 0.1          # 10 MΩ: contact starts
 TOUCH_OFF_US = 1.0 / 15.0  # 15 MΩ: contact ends (hysteresis); also intensity 0
 DEBOUNCE_WINDOWS = 2
 
-G_MAX_SEED_US = 10.0   # 100 kΩ: expected firm palm contact
-G_MAX_FLOOR_US = 1.0   # 1 MΩ: the adaptive top never shrinks below this
-G_MAX_DECAY_PER_S = 0.05
+G_MAX_US = 10.0        # 100 kΩ: default "firm palm" level (intensity 1.0)
+G_MAX_STRETCH = 10.0   # the top may stretch up to 10x for unusually good contact
+STRETCH_TAU_S = 3.0    # how long stronger contact must last to stretch the top
+RELAX_TAU_S = 60.0     # how fast a stretched top returns to g_max_us
 
 
 def conductance_us(raw, r_pullup, r_series):
@@ -32,12 +35,16 @@ def conductance_us(raw, r_pullup, r_series):
 class TouchSensor:
     """Turns hum-free ADC window means into (conductance_us, intensity 0..1, touched)."""
 
-    def __init__(self, r_pullup, r_series, update_hz=50.0):
+    def __init__(self, r_pullup, r_series, update_hz=50.0, g_max_us=G_MAX_US):
         self.r_pullup = r_pullup
         self.r_series = r_series
         self.touched = False
-        self.g_max_us = G_MAX_SEED_US
-        self._decay = (1.0 - G_MAX_DECAY_PER_S) ** (1.0 / update_hz)
+        self._log_floor = math.log(TOUCH_OFF_US)
+        self._log_seed = math.log(g_max_us)
+        self._log_cap = math.log(g_max_us * G_MAX_STRETCH)
+        self._log_top = self._log_seed
+        self._stretch = 1.0 - math.exp(-1.0 / (STRETCH_TAU_S * update_hz))
+        self._relax = 1.0 - math.exp(-1.0 / (RELAX_TAU_S * update_hz))
         self._pending = 0
 
     def update(self, raw):
@@ -45,6 +52,8 @@ class TouchSensor:
         self._update_touch(g)
         if not self.touched:
             return g, 0.0, False
+        if g <= TOUCH_OFF_US:  # letting go, still debouncing
+            return g, 0.0, True
         self._update_range(g)
         return g, self._intensity(g), True
 
@@ -56,13 +65,12 @@ class TouchSensor:
             self._pending = 0
 
     def _update_range(self, g):
-        if g > self.g_max_us:
-            self.g_max_us = g
+        log_g = math.log(g)
+        if log_g > self._log_top:
+            self._log_top += self._stretch * (min(log_g, self._log_cap) - self._log_top)
         else:
-            self.g_max_us = max(self.g_max_us * self._decay, G_MAX_FLOOR_US, g)
+            self._log_top += self._relax * (self._log_seed - self._log_top)
 
     def _intensity(self, g):
-        if g <= TOUCH_OFF_US:
-            return 0.0
-        x = math.log(g / TOUCH_OFF_US) / math.log(self.g_max_us / TOUCH_OFF_US)
+        x = (math.log(g) - self._log_floor) / (self._log_top - self._log_floor)
         return min(x, 1.0)

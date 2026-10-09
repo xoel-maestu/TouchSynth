@@ -22,8 +22,11 @@ brillante, con más capas y presencia; golpe rápido → "florecimiento" de bril
    perceptuales (Hunt & Wanderley, NIME 2002).
 3. **Zumbido de red (50 Hz) y ADC de alta impedancia** sin condensador ni
    promediado: el ruido tapaba las diferencias finas.
-4. pyo estaba roto en el entorno (`libjack` ausente). Se sustituye por numpy +
-   sounddevice (PipeWire/ALSA).
+4. **Pad demasiado grave y con pocos armónicos.** Por encima de ~900 Hz el filtro
+   no tenía nada que abrir, y 55 Hz no se oye en altavoces pequeños. Ahora la
+   raíz es La2 (110 Hz) con 32 armónicos.
+5. pyo estaba roto en el entorno (`libjack` ausente). Se sustituye por numpy +
+   sounddevice (PipeWire/ALSA). Los scripts antiguos están en `legacy/` (necesitan pyo).
 
 ## Material
 
@@ -54,7 +57,16 @@ GND pin 38 ───────────────────────
   10 µA de IEC 60601-1 para partes aplicadas. Usa el PC con batería o un USB de
   calidad; no uses este montaje con equipos médicos implantados.
 
-### Calibración opcional de R1 (5 min, con polímetro)
+### Calibración (2 min, recomendable)
+
+1. Arranca el sintetizador (abajo). El medidor muestra `G=… uS` (conductancia).
+2. Tocaos con la **palma firme** unos segundos y anota el valor `G`.
+3. Pon ese valor en `G_MAX_US` de `firmware/code.py` y vuelve a desplegar.
+   Ese contacto será intensidad 1.0; el roce más leve que se detecta (15 MΩ) es 0.
+   Si alguien consigue un contacto mejor de forma sostenida (>3 s), el techo se
+   estira solo y vuelve a su valor en ~1 min; un pico suelto se ignora.
+
+### Ajuste opcional de R1 (con polímetro)
 
 Cada persona sujeta una punta del polímetro (en Ω) y se tocan: anota la lectura
 con un roce ligero (`R_roce`) y con la palma firme (`R_firme`). El R1 óptimo es
@@ -76,9 +88,10 @@ con un roce ligero (`R_roce`) y con la palma firme (`R_firme`). El R1 óptimo es
 
 ```bash
 pipenv install                       # una vez
-pipenv run python -m touchsynth      # detecta la Pico sola
+pipenv run python -m touchsynth      # detecta la Pico sola (y la espera si no está)
 pipenv run python -m touchsynth --simulate     # sin hardware: gesto de prueba
 pipenv run python -m touchsynth --port /dev/ttyACM0 --volume 0.5 --device pipewire
+pipenv run python -m touchsynth --list-devices  # salidas de audio disponibles
 ```
 
 Cada sesión se graba en `sessions/AAAAMMDD-HHMMSS.csv`
@@ -100,7 +113,12 @@ Escuchar sin hardware ni tarjeta de sonido:
 | Reverb | lineal inversa | lejana (0,5) → presente (0,25) |
 | Golpe rápido | velocidad > 3/s | +1 octava de brillo que decae en 250 ms |
 
-Al soltar, el timbre se mantiene y el volumen se desvanece en ~2 s.
+Al soltar, el timbre se mantiene y el volumen se desvanece en ~2 s (también si
+se desconecta el cable: nunca se queda sonando).
+
+Medido en el render de la simulación (`tools/render_simulation.py`): de roce a
+palma firme el nivel sube de ≈ −40 a ≈ −15 dBFS y el centroide espectral de
+≈ 310 a ≈ 1100 Hz.
 
 ## Arquitectura
 
@@ -123,6 +141,8 @@ hardware simulado).
 - **Nunca detecta contacto**: comprueba el GND común del electrodo B y que cada
   persona agarra bien su electrodo; prueba manos ligeramente húmedas o R1 = 2,2 MΩ.
 - **Siempre "TOUCH"**: algo cortocircuita GP26 a GND; o R1 demasiado pequeña.
-- **Intensidad saturada en 1 enseguida**: R1 demasiado grande → baja a 470 kΩ.
-- **"No Pico found"**: usa `--port`, y añade tu usuario al grupo `uucp`
-  (Arch) / `dialout` (Debian) para acceder a `/dev/ttyACM0`.
+- **Intensidad casi siempre en 1**: `G_MAX_US` demasiado bajo → recalibra.
+- **Intensidad nunca pasa de ~0,5**: `G_MAX_US` demasiado alto → recalibra.
+- **Se queda en "waiting for the Pico..."**: comprueba que aparece `/dev/ttyACM0`,
+  usa `--port`, y añade tu usuario al grupo `uucp` (Arch) / `dialout` (Debian).
+  Cierra cualquier `screen` abierto sobre el puerto.

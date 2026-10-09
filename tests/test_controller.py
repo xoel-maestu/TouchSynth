@@ -67,3 +67,10 @@ def test_bloom_decays():
     t = play(ctrl, 0.9, True, 0.06)
     params, _ = ctrl.current(t + 2.0)
     assert params.cutoff_hz == pytest.approx(map_intensity(ctrl.intensity).cutoff_hz, rel=0.02)
+
+
+def test_gate_fades_out_when_readings_stop_mid_touch():
+    ctrl = TouchController(RATE)
+    t = play(ctrl, 0.8, True, 1.0)  # then the cable is pulled: no more updates
+    assert ctrl.current(t + 0.1)[1] > 0.9
+    assert ctrl.current(t + 5.0)[1] < 0.2

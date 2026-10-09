@@ -78,17 +78,48 @@ def test_hysteresis_keeps_touch_between_thresholds():
     assert touched is False
 
 
-def test_range_adapts_to_people_who_never_reach_the_seed_maximum():
+def test_steady_light_touch_stays_light():
     s = make_sensor()
-    for _ in range(3000):  # ~60 s of touches that only reach 1 MΩ
-        s.update(raw_for(1_000_000))
-    _, intensity, _ = s.update(raw_for(1_000_000))
-    assert intensity > 0.9
+    _, early, _ = feed(s, 1_000_000, 50)
+    _, late, _ = feed(s, 1_000_000, 50 * 120)  # two minutes later
+    assert late == pytest.approx(early, abs=0.02)
+    assert late < 0.75
 
 
-def test_range_expands_immediately_for_stronger_contact():
+def test_single_spike_does_not_shrink_later_readings():
     s = make_sensor()
-    _, intensity, _ = feed(s, 20_000, 3)  # far beyond the 100 kΩ seed
-    assert intensity == pytest.approx(1.0)
-    _, intensity, _ = feed(s, 100_000, 3)
-    assert intensity < 1.0
+    _, before, _ = feed(s, 100_000, 10)
+    feed(s, 2_000, 1)  # sweat / electrodes shorting for one window
+    _, after, _ = feed(s, 100_000, 10)
+    assert after == pytest.approx(before, abs=0.03)
+
+
+def test_range_expands_for_sustained_stronger_contact():
+    s = make_sensor()
+    _, before, _ = feed(s, 100_000, 5)
+    feed(s, 20_000, 50 * 10)  # ten seconds of much better contact
+    _, after, _ = feed(s, 100_000, 5)
+    assert after < before - 0.1
+
+
+def test_range_returns_to_seed_after_a_while():
+    s = make_sensor()
+    _, before, _ = feed(s, 100_000, 5)
+    feed(s, 20_000, 50 * 10)
+    feed(s, 100_000, 50 * 300)  # five minutes of normal play
+    _, after, _ = feed(s, 100_000, 5)
+    assert after == pytest.approx(before, abs=0.03)
+
+
+def test_stronger_than_range_is_clamped_to_one():
+    _, intensity, _ = feed(make_sensor(), 20_000, 3)
+    assert intensity == 1.0
+
+
+def test_sudden_release_to_open_circuit_does_not_crash():
+    s = make_sensor()
+    feed(s, 100_000, 5)
+    _, intensity, touched = s.update(FULL_SCALE)  # still debouncing the release
+    assert intensity == 0.0 and touched is True
+    _, _, touched = s.update(FULL_SCALE)
+    assert touched is False

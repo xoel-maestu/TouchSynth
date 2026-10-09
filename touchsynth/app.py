@@ -9,13 +9,12 @@ import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import sounddevice as sd
 
 from touchsynth.controller import TouchController
 from touchsynth.protocol import Reading
 from touchsynth.recorder import CsvRecorder
-from touchsynth.sources import UPDATE_HZ, SerialSource, SimulatedSource, find_pico_port
+from touchsynth.sources import RELEASED, UPDATE_HZ, SerialSource, SimulatedSource
 from touchsynth.synth import PadSynth
 
 SAMPLE_RATE = 48000
@@ -28,12 +27,13 @@ def parse_args(argv):
     p.add_argument("--simulate", action="store_true", help="play a scripted gesture, no Pico needed")
     p.add_argument("--port", help="serial port of the Pico (auto-detected by default)")
     p.add_argument("--volume", type=float, default=0.7, help="master volume 0..1")
-    p.add_argument("--device", help="audio output device (name or index)")
+    p.add_argument("--device", help="audio output device (name or index, see --list-devices)")
+    p.add_argument("--list-devices", action="store_true", help="list audio devices and exit")
     p.add_argument("--no-record", action="store_true", help="do not write a session CSV")
     return p.parse_args(argv)
 
 
-def _meter(reading: Reading, connected: bool) -> str:
+def meter(reading: Reading, connected: bool) -> str:
     if not connected:
         return "waiting for the Pico...".ljust(60)
     bar = "#" * int(reading.intensity * 30)
@@ -41,55 +41,55 @@ def _meter(reading: Reading, connected: bool) -> str:
     return f"{state} |{bar:<30}| {reading.intensity:4.2f}  G={reading.g_us:7.3f} uS"
 
 
+def open_recorder() -> CsvRecorder:
+    SESSIONS_DIR.mkdir(exist_ok=True)
+    path = SESSIONS_DIR / f"{datetime.datetime.now():%Y%m%d-%H%M%S}.csv"
+    print(f"recording to {path}")
+    return CsvRecorder(path.open("w", buffering=1))  # line-buffered: survives a crash
+
+
 def main(argv=None) -> int:
-    args = parse_args(argv if argv is not None else sys.argv[1:])
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.list_devices:
+        print(sd.query_devices())
+        return 0
+
     controller = TouchController(UPDATE_HZ)
     synth = PadSynth(SAMPLE_RATE)
     volume = max(0.0, min(1.0, args.volume))
     device = int(args.device) if args.device and args.device.isdigit() else args.device
-    last = {"reading": Reading(0, 0, 0.0, 0.0, False)}
-    underflows = [0]
-
-    recorder = None
-    if not args.no_record:
-        SESSIONS_DIR.mkdir(exist_ok=True)
-        path = SESSIONS_DIR / f"{datetime.datetime.now():%Y%m%d-%H%M%S}.csv"
-        recorder = CsvRecorder(path.open("w", buffering=1 << 16))
-        print(f"recording to {path}")
+    recorder = None if args.no_record else open_recorder()
+    last_reading = RELEASED
+    underflows = callback_errors = 0
 
     def on_reading(reading: Reading) -> None:
+        nonlocal last_reading
         now = time.monotonic()
         controller.update(reading.intensity, reading.touched, now)
-        last["reading"] = reading
+        last_reading = reading
         if recorder:
             recorder.write(reading, now)
 
     def callback(outdata, frames, time_info, status):
-        if status.output_underflow:
-            underflows[0] += 1
+        nonlocal underflows, callback_errors
+        underflows += bool(status.output_underflow)
         try:
             params, gate = controller.current(time.monotonic())
             outdata[:] = synth.render(frames, params, gate) * volume
-        except Exception:  # never let the audio thread die
+        except Exception:  # never let the audio thread die; reported on exit
+            callback_errors += 1
             outdata.fill(0)
 
-    if args.simulate:
-        source = SimulatedSource(on_reading)
-    else:
-        port = args.port or find_pico_port()
-        if port is None:
-            print("No Pico found. Plug it in, pass --port, or use --simulate.")
-            return 1
-        source = SerialSource(port, on_reading)
+    source = (SimulatedSource(on_reading) if args.simulate
+              else SerialSource(args.port, on_reading))
     print(f"source: {source.port}   (Ctrl+C to quit)")
-
     source.start()
     try:
         with sd.OutputStream(samplerate=SAMPLE_RATE, blocksize=BLOCK_SIZE, channels=2,
                              dtype="float32", latency="low", device=device,
                              callback=callback):
             while True:
-                print("\r" + _meter(last["reading"], source.connected), end="", flush=True)
+                print("\r" + meter(last_reading, source.connected), end="", flush=True)
                 time.sleep(0.1)
     except KeyboardInterrupt:
         print()
@@ -97,6 +97,8 @@ def main(argv=None) -> int:
         source.stop()
         if recorder:
             recorder.close()
-        if underflows[0]:
-            print(f"warning: {underflows[0]} audio underflows (try a larger --device buffer or close other apps)")
+        if underflows:
+            print(f"warning: {underflows} audio underflows (close other audio apps)")
+        if callback_errors:
+            print(f"error: the synth failed in {callback_errors} audio blocks")
     return 0
