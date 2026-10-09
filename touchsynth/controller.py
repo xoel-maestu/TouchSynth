@@ -14,7 +14,7 @@ from touchsynth.mapping import SynthParams, map_intensity
 from touchsynth.smoothing import OneEuroFilter
 
 ATTACK_SLOW_S, ATTACK_FAST_S = 0.12, 0.005   # gate attack: soft touch .. slap
-RELEASE_MIN_S, RELEASE_MAX_S = 0.15, 3.0     # gate release follows how slowly you let go
+RELEASE_MIN_S, RELEASE_MAX_S = 0.35, 3.0     # gate release follows how slowly you let go
 RELEASE_PER_FALL = 3.0                       # release tau grows 3 s per second of lift
 TRANSIENT_DECAY_S = 0.03
 BLOOM_DECAY_S = 0.15

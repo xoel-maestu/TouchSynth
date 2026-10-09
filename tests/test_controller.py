@@ -53,8 +53,8 @@ def lift(tail):
 def test_fast_lift_cuts_short_and_slow_lift_rings_on():
     fast, t_fast = lift([])
     slow, t_slow = lift([0.8 - 0.03 * i for i in range(1, 26)])  # 0.5 s fade out
-    assert gate(fast, t_fast + 0.6) < 0.2
-    assert gate(slow, t_slow + 0.6) > 0.5
+    assert gate(fast, t_fast + 0.8) < 0.2
+    assert gate(slow, t_slow + 0.8) > 0.5
 
 
 def test_release_keeps_the_timbre():

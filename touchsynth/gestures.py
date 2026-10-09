@@ -9,11 +9,12 @@ import math
 from collections import deque
 
 STRIKE_WINDOW_S = 0.04        # strike = fastest rise seen in the first 40 ms
-STRIKE_SLOW, STRIKE_FAST = 2.0, 15.0   # intensity/s mapped to strike 0..1
+STRIKE_SLOW, STRIKE_FAST = 10.0, 35.0  # intensity/s -> strike 0..1 (real pinches: p10 13, p90 32)
+ONSET_SETTLE_S = 0.25         # a pinch keeps rising this long: not tremor, not a squeeze
 PRESS_TAU_S = 4.0             # press = intensity above this slow, per-touch baseline
 TREMOR_HIGHPASS_HZ = 3.0
 TREMOR_WINDOW_S = 0.3
-TREMOR_FLOOR, TREMOR_FULL = 0.002, 0.03   # RMS of the 3+ Hz band (real data: p10, p90)
+TREMOR_FLOOR, TREMOR_FULL = 0.003, 0.04   # RMS of the 3+ Hz band (real holds: p20 0.002, p99 0.1)
 FALL_HISTORY_S = 1.0
 FALL_LEVEL = 0.7              # lift starts when intensity drops below 70 % of the hold
 
@@ -76,10 +77,13 @@ class GestureTracker:
         if since <= STRIKE_WINDOW_S:
             speed = x / (since + self.dt)
             self.strike = max(self.strike, _clamp((speed - STRIKE_SLOW) / (STRIKE_FAST - STRIKE_SLOW)))
-        self._baseline += self._press_a * (x - self._baseline)
-        self._hp = self._hp_a * (self._hp + x - self._hp_in)
-        self._hp_in = x
-        self._power += self._rms_a * (self._hp ** 2 - self._power)
+        if since < ONSET_SETTLE_S:  # still rising into the contact
+            self._baseline = self._hp_in = x
+        else:
+            self._baseline += self._press_a * (x - self._baseline)
+            self._hp = self._hp_a * (self._hp + x - self._hp_in)
+            self._hp_in = x
+            self._power += self._rms_a * (self._hp ** 2 - self._power)
         self._history.append((now, x))
         while self._history[0][0] < now - FALL_HISTORY_S:
             self._history.popleft()

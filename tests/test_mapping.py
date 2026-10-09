@@ -56,7 +56,7 @@ def test_tremor_adds_vibrato():
 
 
 def test_press_widens_and_detunes():
-    flat, squeezed = map_intensity(0.5), map_intensity(0.5, press=0.2)
+    flat, squeezed = map_intensity(0.5), map_intensity(0.5, press=0.25)
     assert squeezed.width > flat.width + 0.4
     assert squeezed.detune_cents > flat.detune_cents + 5
 

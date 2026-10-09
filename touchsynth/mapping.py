@@ -58,7 +58,7 @@ def map_intensity(x: float, bloom: float = 0.0, *, tremor: float = 0.0,
     """
     x = _clamp(x)
     bloom = _clamp(bloom)
-    squeeze = _clamp(press / 0.2)
+    squeeze = _clamp(press / 0.25)  # real settled squeezes: p90 0.17, p99 0.28
     return SynthParams(
         gain_db=_lin(x, -30.0, 0.0),
         cutoff_hz=_exp(x, 100.0, 8000.0) * 2.0 ** (1.5 * bloom),

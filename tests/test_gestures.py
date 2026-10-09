@@ -75,3 +75,29 @@ def test_hold_time_counts_while_touching():
     g = GestureTracker(RATE)
     run(g, [0.5] * 150, rest(g, 0.5))
     assert g.hold_s == pytest.approx(3.0, abs=0.05)
+
+
+def rising_then_steady(tracker):
+    """A real pinch: the contact keeps rising for ~100 ms after onset, then holds."""
+    t = run(tracker, [0.2, 0.4, 0.6, 0.75, 0.8], rest(tracker, 0.5))
+    return run(tracker, [0.8] * 25, t)
+
+
+def test_the_onset_rise_is_not_tremor():
+    g = GestureTracker(RATE)
+    rising_then_steady(g)
+    assert g.tremor < 0.1
+
+
+def test_the_onset_rise_is_not_a_squeeze():
+    g = GestureTracker(RATE)
+    rising_then_steady(g)
+    assert abs(g.press) < 0.05
+
+
+def test_strike_spreads_over_real_pinch_speeds():
+    def strike_for(first_x):  # real pinches reach 0.25..0.65 in the first 20 ms window
+        g = GestureTracker(RATE)
+        run(g, [first_x], rest(g, 0.5))
+        return g.strike
+    assert strike_for(0.25) < 0.25 < strike_for(0.45) < 0.75 < strike_for(0.65)
