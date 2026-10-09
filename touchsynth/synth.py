@@ -11,6 +11,7 @@ from scipy.signal import lfilter
 from touchsynth.mapping import SynthParams
 
 FILTER_ORDER = 2  # ~24 dB/oct feel
+OUTPUT_GAIN = 2.0  # light touch ~ -40 dBFS RMS, firm ~ -16 dBFS RMS, peak < 0.9
 MIX_LEVEL = 0.15  # full intensity: mix peak ~2.2 x drive 4 x 0.15 ~ 1.3 into tanh = warmth, not fuzz
 
 
@@ -124,4 +125,4 @@ class PadSynth:
             out = out * (1 - wet) + self.reverb.process(out.mean(axis=1)) * wet * 2
 
         self._prev, self._prev_gate = params, gate
-        return np.clip(out, -1.0, 1.0)
+        return np.clip(out * OUTPUT_GAIN, -1.0, 1.0)

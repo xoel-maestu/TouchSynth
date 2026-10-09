@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from touchsynth.mapping import map_intensity
-from touchsynth.synth import FdnReverb, PadSynth
+from touchsynth.synth import OUTPUT_GAIN, FdnReverb, PadSynth
 
 FS = 48000
 BLOCK = 512
@@ -82,6 +82,13 @@ def test_reverb_tail_decays():
     assert tail[-1] < 1e-3 * max(tail[:20])  # > 60 dB down after 6 s (T60 = 2 s)
 
 
+@pytest.mark.parametrize("bloom", [0.0, 1.0])
+def test_never_clips_even_with_bloom_and_reverb(bloom):
+    synth = PadSynth(FS)
+    out = np.concatenate([synth.render(BLOCK, map_intensity(1.0, bloom), 1.0) for _ in range(300)])
+    assert np.max(np.abs(out)) < 0.95
+
+
 @pytest.mark.parametrize("n", [128, 256, 512, 1024])
 def test_supports_variable_block_sizes(n):
     out = PadSynth(FS).render(n, map_intensity(0.5), 1.0)
@@ -91,5 +98,5 @@ def test_supports_variable_block_sizes(n):
 def test_saturation_is_gentle_at_full_intensity():
     synth = PadSynth(FS, reverb=False)
     out = render_seconds(synth, 1.0, 1.0)
-    ceiling = 1.0 / np.sqrt(10 ** (12 / 20))  # tanh asymptote after makeup
-    assert np.max(np.abs(out)) < 0.95 * ceiling
+    ceiling = OUTPUT_GAIN / np.sqrt(10 ** (12 / 20))  # tanh asymptote after makeup
+    assert np.max(np.abs(out)) < min(0.95 * ceiling, 1.0)

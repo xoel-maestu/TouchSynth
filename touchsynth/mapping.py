@@ -48,7 +48,7 @@ def map_intensity(x: float, bloom: float = 0.0) -> SynthParams:
     x = _clamp(x)
     bloom = _clamp(bloom)
     return SynthParams(
-        gain_db=_lin(x, -36.0, 0.0),
+        gain_db=_lin(x, -24.0, 0.0),
         cutoff_hz=_exp(x, 150.0, 4000.0) * 2.0 ** bloom,
         detune_cents=_exp(x, 3.0, 18.0),
         fifth_gain=_fade_in(x, 0.25, 0.6, -6.0),

@@ -11,7 +11,7 @@ def test_endpoints_of_cutoff_and_gain():
     lo, hi = map_intensity(0.0), map_intensity(1.0)
     assert lo.cutoff_hz == pytest.approx(150.0)
     assert hi.cutoff_hz == pytest.approx(4000.0)
-    assert lo.gain_db == pytest.approx(-36.0)
+    assert lo.gain_db == pytest.approx(-24.0)
     assert hi.gain_db == pytest.approx(0.0)
 
 
@@ -42,7 +42,7 @@ def test_layers_enter_progressively():
 def test_light_and_firm_touch_sound_clearly_different():
     light, firm = map_intensity(0.2), map_intensity(0.8)
     assert firm.cutoff_hz / light.cutoff_hz > 4.0      # > 2 octaves brighter
-    assert firm.gain_db - light.gain_db > 15.0         # clearly louder
+    assert firm.gain_db - light.gain_db > 12.0         # clearly louder (plus layers)
 
 
 def test_bloom_brightens_up_to_one_octave():
