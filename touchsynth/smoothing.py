@@ -35,17 +35,3 @@ class OneEuroFilter:
         self.value += _alpha(cutoff, self.rate_hz) * (x - self.value)
         return self.value
 
-
-class AsymmetricFollower:
-    """One-pole follower with separate attack and release time constants."""
-
-    def __init__(self, rate_hz: float, attack_s: float, release_s: float,
-                 initial: float = 0.0):
-        self._attack = 1.0 - math.exp(-1.0 / (attack_s * rate_hz))
-        self._release = 1.0 - math.exp(-1.0 / (release_s * rate_hz))
-        self.value = initial
-
-    def __call__(self, target: float) -> float:
-        coeff = self._attack if target > self.value else self._release
-        self.value += coeff * (target - self.value)
-        return self.value

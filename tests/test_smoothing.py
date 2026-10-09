@@ -1,6 +1,6 @@
 import math
 
-from touchsynth.smoothing import AsymmetricFollower, OneEuroFilter
+from touchsynth.smoothing import OneEuroFilter
 
 RATE = 150.0
 
@@ -36,12 +36,3 @@ def test_one_euro_exposes_derivative():
         f(i / RATE)  # ramp of 1 unit per second
     assert math.isclose(f.derivative, 1.0, rel_tol=0.1)
 
-
-def test_follower_attacks_fast_and_releases_slow():
-    env = AsymmetricFollower(rate_hz=RATE, attack_s=0.04, release_s=2.0)
-    for _ in range(int(0.2 * RATE)):  # 200 ms on
-        up = env(1.0)
-    assert up > 0.95
-    for _ in range(int(0.2 * RATE)):  # 200 ms off
-        down = env(0.0)
-    assert down > 0.85

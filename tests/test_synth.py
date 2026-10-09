@@ -123,3 +123,45 @@ def test_saturation_is_gentle_at_full_intensity():
     out = render_seconds(synth, 1.0, 1.0)
     ceiling = OUTPUT_GAIN / np.sqrt(10 ** (12 / 20))  # tanh asymptote after makeup
     assert np.max(np.abs(out)) < min(0.95 * ceiling, 1.0)
+
+
+def dry(params, seconds=1.0):
+    synth = PadSynth(FS, reverb=False)
+    return np.concatenate([synth.render(BLOCK, params, 1.0) for _ in range(int(seconds * FS / BLOCK))])
+
+
+def test_vibrato_modulates_the_pitch():
+    from dataclasses import replace
+    base = map_intensity(0.0)
+
+    def sideband_power(params):  # FM sidebands at 110 ± 5.5 Hz
+        mono = dry(params, 2.0)[FS // 2:].mean(axis=1)
+        spec = np.abs(np.fft.rfft(mono * np.hanning(len(mono)))) ** 2
+        f = np.fft.rfftfreq(len(mono), 1 / FS)
+        return spec[(abs(f - 104.5) < 1) | (abs(f - 115.5) < 1)].sum() / spec.sum()
+
+    assert sideband_power(replace(base, vibrato_cents=20.0)) > 10 * sideband_power(base)
+
+
+def test_width_decorrelates_the_channels():
+    from dataclasses import replace
+    p = map_intensity(0.6)
+
+    def corr(width):
+        out = dry(replace(p, width=width))[FS // 4:]
+        return np.corrcoef(out[:, 0], out[:, 1])[0, 1]
+
+    assert corr(1.0) < corr(0.0) - 0.1
+
+
+def test_shimmer_adds_brightness():
+    from dataclasses import replace
+    p = map_intensity(0.6)
+    assert spectral_centroid(dry(replace(p, shimmer_gain=0.5))) > 1.15 * spectral_centroid(dry(p))
+
+
+def test_noise_burst_is_added_on_strikes():
+    from dataclasses import replace
+    p = map_intensity(0.6)
+    clean, burst = dry(p, 0.2), dry(replace(p, noise_gain=1.0), 0.2)
+    assert rms(burst - clean) > 0.01

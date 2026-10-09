@@ -17,7 +17,8 @@ MIN_SKIN_OHMS = 1000.0  # clamp for a shorted electrode pair
 
 TOUCH_ON_US = 0.05    # 20 MΩ above the resting baseline: contact starts
 TOUCH_OFF_US = 0.03   # 33 MΩ: contact ends (hysteresis); also intensity 0
-DEBOUNCE_WINDOWS = 2
+DEBOUNCE_ON = 1       # windows needed to start a touch (latency matters most here)
+DEBOUNCE_OFF = 2      # windows needed to end one (avoids dropouts mid-touch)
 BASELINE_TAU_S = 2.0  # how fast the resting baseline follows drift (untouched only)
 BASELINE_BAND_US = 0.015  # baseline only rises within this noise band, so a slowly
                           # approaching light touch is not absorbed; it may fall freely
@@ -81,7 +82,7 @@ class TouchSensor:
     def _update_touch(self, g):
         wants_change = g < TOUCH_OFF_US if self.touched else g > TOUCH_ON_US
         self._pending = self._pending + 1 if wants_change else 0
-        if self._pending >= DEBOUNCE_WINDOWS:
+        if self._pending >= (DEBOUNCE_OFF if self.touched else DEBOUNCE_ON):
             self.touched = not self.touched
             self._pending = 0
 

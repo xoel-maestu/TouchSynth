@@ -73,13 +73,14 @@ def test_intensity_is_logarithmic_in_conductance():
     assert (b - a) == pytest.approx(c - b, abs=0.02)  # equal ratios -> equal steps
 
 
-def test_touch_needs_consecutive_windows_to_switch_on():
+def test_touch_starts_on_the_first_window_but_needs_two_to_end():
     s = make_sensor()
-    feed(s, math.inf, 5)
-    _, _, touched = s.update(raw_for(1_000_000))
-    assert touched is False
     _, _, touched = s.update(raw_for(1_000_000))
     assert touched is True
+    _, _, touched = s.update(raw_for(math.inf))
+    assert touched is True
+    _, _, touched = s.update(raw_for(math.inf))
+    assert touched is False
 
 
 def test_hysteresis_keeps_touch_between_thresholds():

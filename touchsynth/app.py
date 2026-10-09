@@ -18,7 +18,7 @@ from touchsynth.sources import RELEASED, UPDATE_HZ, SerialSource, SimulatedSourc
 from touchsynth.synth import PadSynth
 
 SAMPLE_RATE = 48000
-BLOCK_SIZE = 512  # 10.7 ms
+BLOCK_SIZE = 256  # 5.3 ms
 SESSIONS_DIR = Path("sessions")
 
 

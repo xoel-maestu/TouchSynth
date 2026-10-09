@@ -9,15 +9,15 @@ XS = [i / 20 for i in range(21)]
 
 def test_endpoints_of_cutoff_and_gain():
     lo, hi = map_intensity(0.0), map_intensity(1.0)
-    assert lo.cutoff_hz == pytest.approx(150.0)
-    assert hi.cutoff_hz == pytest.approx(4000.0)
-    assert lo.gain_db == pytest.approx(-24.0)
+    assert lo.cutoff_hz == pytest.approx(100.0)
+    assert hi.cutoff_hz == pytest.approx(8000.0)
+    assert lo.gain_db == pytest.approx(-30.0)
     assert hi.gain_db == pytest.approx(0.0)
 
 
 def test_cutoff_is_exponential():
     mid = map_intensity(0.5).cutoff_hz
-    assert mid == pytest.approx(math.sqrt(150.0 * 4000.0))
+    assert mid == pytest.approx(math.sqrt(100.0 * 8000.0))
 
 
 @pytest.mark.parametrize("field", ["cutoff_hz", "gain_db", "detune_cents",
@@ -45,9 +45,33 @@ def test_light_and_firm_touch_sound_clearly_different():
     assert firm.gain_db - light.gain_db > 12.0         # clearly louder (plus layers)
 
 
-def test_bloom_brightens_up_to_one_octave():
+def test_bloom_brightens_up_to_one_and_a_half_octaves():
     base = map_intensity(0.5).cutoff_hz
-    assert map_intensity(0.5, bloom=1.0).cutoff_hz == pytest.approx(2 * base)
+    assert map_intensity(0.5, bloom=1.0).cutoff_hz == pytest.approx(2 ** 1.5 * base)
+
+
+def test_tremor_adds_vibrato():
+    assert map_intensity(0.5).vibrato_cents == 0.0
+    assert map_intensity(0.5, tremor=1.0).vibrato_cents == pytest.approx(20.0)
+
+
+def test_press_widens_and_detunes():
+    flat, squeezed = map_intensity(0.5), map_intensity(0.5, press=0.2)
+    assert squeezed.width > flat.width + 0.4
+    assert squeezed.detune_cents > flat.detune_cents + 5
+
+
+def test_long_holds_grow_a_shimmer_layer():
+    assert map_intensity(0.7, hold_s=0.0).shimmer_gain == 0.0
+    early = map_intensity(0.7, hold_s=2.0).shimmer_gain
+    late = map_intensity(0.7, hold_s=20.0).shimmer_gain
+    assert 0.0 < early < late
+
+
+def test_transient_and_reverb_boost_pass_through_clamped():
+    p = map_intensity(0.5, transient=0.6, reverb_boost=2.0)
+    assert p.noise_gain == pytest.approx(0.6)
+    assert p.reverb_wet <= 0.9
 
 
 def test_input_is_clamped():

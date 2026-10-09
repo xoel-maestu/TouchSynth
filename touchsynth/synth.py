@@ -13,6 +13,10 @@ from touchsynth.mapping import SynthParams
 FILTER_ORDER = 2  # 12 dB/oct on top of the 1/k harmonic slope
 OUTPUT_GAIN = 2.0  # light touch ~ -40 dBFS RMS, firm ~ -16 dBFS RMS, peak < 0.9
 MIX_LEVEL = 0.15  # full intensity: mix peak ~2.2 x drive 4 x 0.15 ~ 1.3 into tanh = warmth, not fuzz
+VIBRATO_HZ = 5.5
+SHIMMER = 5         # index of the two-octaves-up voice in the layout
+SHIMMER_AIR = 2.0   # it is filtered an octave above the pad: "air"
+NOISE_LEVEL = 1.5  # strike burst, before the saturator (it is lowpassed at the pad cutoff)
 
 
 class _Voice:
@@ -32,8 +36,8 @@ class _Voice:
         return amps
 
     def render(self, ramp: np.ndarray, f0_start: float, f0_end: float,
-               cutoff_hz: float) -> np.ndarray:
-        f0 = f0_start + (f0_end - f0_start) * ramp
+               cutoff_hz: float, pitch_mod: np.ndarray) -> np.ndarray:
+        f0 = (f0_start + (f0_end - f0_start) * ramp) * pitch_mod
         phases = self.phase + np.cumsum(f0) / self.sample_rate
         self.phase = phases[-1] % 1.0
         new_amps = self._harmonic_amps(f0_end, cutoff_hz)
@@ -72,22 +76,30 @@ class FdnReverb:
         return np.stack([outs[0] + outs[2], outs[1] + outs[3]], axis=1) * 0.5
 
 
+def _pan_gains(spread: np.ndarray, width: float) -> np.ndarray:
+    """Equal-power (L, R) gains per voice; width 0 = mono, 1 = full spread."""
+    pan = 0.5 + 0.5 * np.clip(spread * width, -1.0, 1.0)
+    return np.stack([np.cos(pan * np.pi / 2), np.sin(pan * np.pi / 2)], axis=1)
+
+
 class PadSynth:
     # A2 root: audible on small speakers; 32 harmonics reach 3.5 kHz (7 kHz on the
-    # octave layer), so the 150 Hz -> 4 kHz cutoff sweep is heard over its whole range.
+    # octave layer, 14 kHz on the shimmer), so the cutoff sweep is heard to the top.
     def __init__(self, sample_rate: int = 48000, root_hz: float = 110.0,
                  harmonics: int = 32, reverb: bool = True):
         self.sample_rate = sample_rate
         self.root_hz = root_hz
-        # (pitch ratio to root, detune sign, pan 0=L..1=R)
-        layout = [(1.0, -1, 0.15), (1.0, 0, 0.5), (1.0, 1, 0.85),
-                  (1.5, 0, 0.35), (2.0, 0, 0.65)]
+        # (pitch ratio to root, detune sign, pan -1=L..1=R at full width)
+        layout = [(1.0, -1, -1.0), (1.0, 0, 0.0), (1.0, 1, 1.0),
+                  (1.5, 0, -0.5), (2.0, 0, 0.5), (4.0, 0, 0.0)]  # 4.0: shimmer
         self.voices = [_Voice(sample_rate, r, harmonics) for r, _, _ in layout]
         self.detune_signs = [s for _, s, _ in layout]
-        self.pans = np.array([[np.cos(p * np.pi / 2), np.sin(p * np.pi / 2)]
-                              for _, _, p in layout])
+        self.pan_spread = np.array([p for _, _, p in layout])
         self.sub_phase = 0.0
         self.lfo_phase = 0.0
+        self.vibrato_phase = 0.0
+        self._noise = np.random.default_rng(7)
+        self._noise_state = np.zeros(1)
         self.reverb = FdnReverb(sample_rate) if reverb else None
         self._prev = None
         self._prev_gate = 0.0
@@ -100,15 +112,28 @@ class PadSynth:
         def lerp(a, b):
             return a + (b - a) * ramp
 
+        vib_phases = self.vibrato_phase + np.arange(1, n + 1) * VIBRATO_HZ / self.sample_rate
+        self.vibrato_phase = vib_phases[-1] % 1.0
+        pitch_mod = 2 ** (lerp(prev.vibrato_cents, params.vibrato_cents)
+                          * np.sin(2 * np.pi * vib_phases) / 1200)
+
         out = np.zeros((n, 2))
-        layer_gain = [1 / 3, 1 / 3, 1 / 3, params.fifth_gain, params.octave_gain]
-        prev_layer_gain = [1 / 3, 1 / 3, 1 / 3, prev.fifth_gain, prev.octave_gain]
+        layer_gain = [1 / 3, 1 / 3, 1 / 3, params.fifth_gain, params.octave_gain, params.shimmer_gain]
+        prev_layer_gain = [1 / 3, 1 / 3, 1 / 3, prev.fifth_gain, prev.octave_gain, prev.shimmer_gain]
+        pans_now, pans_prev = _pan_gains(self.pan_spread, params.width), _pan_gains(self.pan_spread, prev.width)
         for i, voice in enumerate(self.voices):
             f0 = self.root_hz * voice.ratio * 2 ** (self.detune_signs[i] * params.detune_cents / 1200)
-            signal = voice.render(ramp, self._prev_f0[i], f0, params.cutoff_hz)
+            cutoff = params.cutoff_hz * (SHIMMER_AIR if i == SHIMMER else 1.0)
+            signal = voice.render(ramp, self._prev_f0[i], f0, cutoff, pitch_mod)
             self._prev_f0[i] = f0
             signal *= lerp(prev_layer_gain[i], layer_gain[i])
-            out += signal[:, None] * self.pans[i]
+            out += signal[:, None] * (pans_prev[i] + np.outer(ramp, pans_now[i] - pans_prev[i]))
+
+        if params.noise_gain > 0 or prev.noise_gain > 0:
+            pole = np.exp(-2 * np.pi * min(params.cutoff_hz, 0.45 * self.sample_rate) / self.sample_rate)
+            noise, self._noise_state = lfilter([1 - pole], [1, -pole], self._noise.standard_normal(n),
+                                               zi=self._noise_state)
+            out += (noise * NOISE_LEVEL * lerp(prev.noise_gain, params.noise_gain))[:, None]
 
         sub_phases = self.sub_phase + np.arange(1, n + 1) * (self.root_hz / 2) / self.sample_rate
         self.sub_phase = sub_phases[-1] % 1.0
