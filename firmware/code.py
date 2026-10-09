@@ -3,8 +3,8 @@
 Measures skin-to-skin contact between two people and streams, over USB serial,
 one line per 20 ms window:  ms,raw,g_us,intensity,touched
 
-Wiring (see README):  3V3 -- 1 MΩ -- GP26 -- 100 kΩ -- electrode A
-                      GP26 -- 10 nF -- AGND        electrode B -- GND
+Wiring (see README):  3V3 -- 1 MΩ -- GP26 -- [R2 100 kΩ, optional] -- electrode A
+                      GP26 -- [10 nF, optional] -- AGND        electrode B -- GND
 """
 
 import array
@@ -17,8 +17,8 @@ import digitalio
 from touchcore import TouchSensor
 
 R_PULLUP = 1_000_000   # change if you fit a different resistor (470 kΩ / 2.2 MΩ)
-R_SERIES = 100_000
-G_MAX_US = 10.0        # conductance of a firm palm contact = intensity 1.0 (see README)
+R_SERIES = 0          # 100_000 if you fit the optional R2 (ESD protection)
+G_MAX_US = 0.8        # firm contact = intensity 1.0; calibrated on bare jumper-pin electrodes (README)
 SAMPLE_RATE = 10_000
 WINDOW = 200           # 200 samples @ 10 kHz = 20 ms = one 50 Hz mains period
 

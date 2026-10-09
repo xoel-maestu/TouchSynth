@@ -67,14 +67,13 @@ def run_firmware(monkeypatch, level_for_window, lines_wanted):
     return printed
 
 
-def divider_raw(skin_ohms):
-    rx = skin_ohms + 100_000
-    return 65535 * rx / (1_000_000 + rx)
+def divider_raw(skin_ohms):  # firmware/code.py: 1 MΩ pull-up, no series resistor
+    return 65535 * skin_ohms / (1_000_000 + skin_ohms)
 
 
 def test_firmware_streams_parseable_lines_and_rejects_hum(monkeypatch):
-    def level(n):  # untouched, then light touch, then firm touch
-        return 65535 if n < 10 else divider_raw(5e6) if n < 20 else divider_raw(1e5)
+    def level(n):  # untouched, then light and firm touch (range measured on the real board)
+        return 65535 if n < 10 else divider_raw(8e6) if n < 20 else divider_raw(1.25e6)
 
     lines = run_firmware(monkeypatch, level, 30)
     assert lines[0].startswith("#")
@@ -85,7 +84,7 @@ def test_firmware_streams_parseable_lines_and_rejects_hum(monkeypatch):
     assert light.touched and firm.touched
     assert firm.intensity > light.intensity + 0.5
     # a full mains period per window: the ±3000-count hum leaves < 1% error
-    assert abs(light.raw - divider_raw(5e6)) < 0.01 * 65535
+    assert abs(light.raw - divider_raw(8e6)) < 0.01 * 65535
 
 
 def test_firmware_skips_short_adc_reads(monkeypatch):

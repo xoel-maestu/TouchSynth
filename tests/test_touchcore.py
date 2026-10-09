@@ -2,22 +2,29 @@ import math
 
 import pytest
 
-from touchcore import FULL_SCALE, TouchSensor, conductance_us
+from touchcore import FULL_SCALE, TouchSensor, node_conductance_us
 
 R_PULLUP = 1_000_000
 R_SERIES = 100_000
 
 
-def raw_for(skin_ohms):
-    """ADC reading produced by a given skin-path resistance (divider model)."""
-    if math.isinf(skin_ohms):
+def raw_for(skin_ohms, rest_ohms=math.inf):
+    """ADC reading for the skin path (R_SERIES + skin) in parallel with a resting load
+    to GND (on the real board: the ADC's own sampling load, ~15 MΩ)."""
+    g = 0.0 if math.isinf(skin_ohms) else 1.0 / (skin_ohms + R_SERIES)
+    g += 0.0 if math.isinf(rest_ohms) else 1.0 / rest_ohms
+    if g == 0.0:
         return FULL_SCALE
-    rx = skin_ohms + R_SERIES
+    rx = 1.0 / g
     return round(FULL_SCALE * rx / (R_PULLUP + rx))
 
 
-def make_sensor():
-    return TouchSensor(r_pullup=R_PULLUP, r_series=R_SERIES)
+def make_sensor(rest_ohms=math.inf):
+    """A sensor that has booted untouched (it learns its resting baseline then)."""
+    sensor = TouchSensor(r_pullup=R_PULLUP, r_series=R_SERIES)
+    for _ in range(5):
+        sensor.update(raw_for(math.inf, rest_ohms))
+    return sensor
 
 
 def feed(sensor, skin_ohms, windows):
@@ -26,16 +33,22 @@ def feed(sensor, skin_ohms, windows):
     return result
 
 
-def test_conductance_inverts_the_divider():
-    assert conductance_us(raw_for(1_000_000), R_PULLUP, R_SERIES) == pytest.approx(1.0, rel=1e-3)
+def test_node_conductance_inverts_the_divider():
+    raw = round(FULL_SCALE * 1e6 / (R_PULLUP + 1e6))
+    assert node_conductance_us(raw, R_PULLUP) == pytest.approx(1.0, rel=1e-3)
 
 
 def test_open_circuit_has_zero_conductance():
-    assert conductance_us(FULL_SCALE, R_PULLUP, R_SERIES) == 0.0
+    assert node_conductance_us(FULL_SCALE, R_PULLUP) == 0.0
 
 
 def test_short_circuit_is_finite():
-    assert math.isfinite(conductance_us(0, R_PULLUP, R_SERIES))
+    assert math.isfinite(node_conductance_us(0, R_PULLUP))
+
+
+def test_reports_skin_conductance_without_the_series_resistor():
+    g, _, _ = feed(make_sensor(), 1_000_000, 5)
+    assert g == pytest.approx(1.0, rel=1e-2)
 
 
 def test_untouched_reads_zero_intensity_and_no_touch():
@@ -72,9 +85,9 @@ def test_touch_needs_consecutive_windows_to_switch_on():
 def test_hysteresis_keeps_touch_between_thresholds():
     s = make_sensor()
     feed(s, 1_000_000, 5)
-    _, _, touched = feed(s, 12_000_000, 5)  # between on (10 MΩ) and off (15 MΩ)
+    _, _, touched = feed(s, 25_000_000, 5)  # between on (20 MΩ) and off (33 MΩ)
     assert touched is True
-    _, _, touched = feed(s, 30_000_000, 5)
+    _, _, touched = feed(s, 100_000_000, 5)
     assert touched is False
 
 
@@ -128,3 +141,51 @@ def test_sudden_release_to_open_circuit_does_not_crash():
 def test_rejects_a_firm_level_below_the_touch_threshold():
     with pytest.raises(ValueError):
         TouchSensor(R_PULLUP, R_SERIES, g_max_us=0.05)
+
+
+REST_LOAD = 15_000_000  # measured on the real board: ~0.067 µS with nobody touching
+
+
+def test_resting_load_is_not_a_touch_and_reads_zero():
+    s = make_sensor(REST_LOAD)
+    for _ in range(100):
+        g, intensity, touched = s.update(raw_for(math.inf, REST_LOAD))
+    assert touched is False and intensity == 0.0
+    assert g == pytest.approx(0.0, abs=0.005)
+
+
+@pytest.mark.parametrize("skin", [10_000_000, 2_000_000, 500_000])
+def test_touch_reads_the_same_with_or_without_resting_load(skin):
+    clean, loaded = make_sensor(), make_sensor(REST_LOAD)
+    _, expected, _ = feed(clean, skin, 5)
+    for _ in range(5):
+        _, got, touched = loaded.update(raw_for(skin, REST_LOAD))
+    assert touched is True
+    assert got == pytest.approx(expected, abs=0.03)
+
+
+def test_release_is_detected_promptly_despite_resting_load():
+    s = make_sensor(REST_LOAD)
+    for _ in range(50):
+        s.update(raw_for(2_000_000, REST_LOAD))
+    s.update(raw_for(math.inf, REST_LOAD))
+    _, _, touched = s.update(raw_for(math.inf, REST_LOAD))
+    assert touched is False
+
+
+def test_baseline_follows_slow_drift_but_freezes_while_touching():
+    s = make_sensor(REST_LOAD)
+    for _ in range(50 * 20):  # resting load drifts (holding one electrode lowered it)
+        _, _, touched = s.update(raw_for(math.inf, 30_000_000))
+    assert touched is False
+    for _ in range(50 * 60):  # one-minute steady hold
+        _, intensity, touched = s.update(raw_for(2_000_000, 30_000_000))
+    assert touched is True and intensity > 0.3
+
+
+def test_a_slow_approaching_light_touch_is_not_absorbed_into_the_baseline():
+    s = make_sensor(REST_LOAD)
+    touched = False
+    for skin in range(100_000_000, 5_000_000, -50_000):  # ~38 s slow approach
+        _, _, touched = s.update(raw_for(skin, REST_LOAD))
+    assert touched is True
