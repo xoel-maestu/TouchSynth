@@ -183,7 +183,8 @@ hardware simulado).
   `tools/evaluate_sessions.py` con el motor final: sin clipping, 12–17 dB de
   rango de volumen, brillo ×7–11, vibrato usado sin saturar, anchura variable,
   4–5 colores de timbre, 6–9 notas distintas y 100 % de pasos melódicos.
-- Audio: con bloques de 512 muestras, 0–5 underflows en 150 s (con 256 eran
+- Audio: bloques de 512 muestras y buffer de salida de 30 ms → 0 underflows en
+  3 × 60 s con la Pico real (con 256 / "low" había desde 4 por minuto hasta
   cientos). Latencia de control ~40 ms, ataque en un golpe ~10 ms.
 - Una sesión real grabada es test de regresión (`tests/test_real_session.py`).
 

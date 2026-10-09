@@ -19,6 +19,7 @@ from touchsynth.synth import PadSynth
 
 SAMPLE_RATE = 48000
 BLOCK_SIZE = 512  # 10.7 ms; 256 underflowed under load (51 in 40 s)
+OUTPUT_LATENCY_S = 0.03  # 'low' (~11 ms) underflowed ~4/min with the serial reader; 30 ms: none
 SESSIONS_DIR = Path("sessions")
 
 
@@ -89,7 +90,7 @@ def main(argv=None) -> int:
     source.start()
     try:
         with sd.OutputStream(samplerate=SAMPLE_RATE, blocksize=BLOCK_SIZE, channels=2,
-                             dtype="float32", latency="low", device=device,
+                             dtype="float32", latency=OUTPUT_LATENCY_S, device=device,
                              callback=callback):
             while True:
                 print("\r" + meter(last_reading, source.connected), end="", flush=True)
