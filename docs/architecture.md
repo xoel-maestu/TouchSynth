@@ -88,7 +88,7 @@ non-finite lines are discarded by `parse_line`.
 
 `SerialSource` finds the Pico by USB vendor ID (Adafruit or Raspberry Pi),
 reads lines in a daemon thread, and on any failure reports a release (so the
-sound never keeps droning), waits one second and reconnects — looking the port
+sound never keeps droning), waits one second and reconnects, looking the port
 up again, so a replug that comes back under another name is still found.
 `SimulatedSource` plays a looping 24 s gesture script at the same rate.
 
@@ -146,9 +146,9 @@ the real hardware (see [validation.md](validation.md)).
 controller at their original times and renders the synth block by block, with
 a fixed random seed so renders are reproducible. It is shared by:
 
-- `tools/render.py` — writes a WAV and prints, per second, touch share,
+- `tools/render.py`: writes a WAV and prints, per second, touch share,
   intensity, audio level, spectral centroid and current note;
-- `tools/evaluate_sessions.py` — runs nine objective checks per session and
+- `tools/evaluate_sessions.py`: runs nine objective checks per session and
   exits non-zero if any fails, so tuning can iterate until every recorded
   session passes.
 

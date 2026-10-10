@@ -64,11 +64,11 @@ The pad is additive (32 harmonics per voice) and its tone colour is a position
 on a circular palette of five colours, chosen to span the brightness and
 spectral-shape dimensions of timbre space (McAdams et al., 1995):
 
-1. **flute** — soft, few overtones (1/k²)
-2. **warm** — sawtooth-like (1/k)
-3. **hollow** — clarinet-like, odd harmonics only
-4. **choir "ah"** — vowel formants at 700 / 1220 / 2600 Hz
-5. **choir "oo"** — vowel formants at 300 / 870 / 2240 Hz
+1. **flute**: soft, few overtones (1/k²)
+2. **warm**: sawtooth-like (1/k)
+3. **hollow**: clarinet-like, odd harmonics only
+4. **choir "ah"**: vowel formants at 700 / 1220 / 2600 Hz
+5. **choir "oo"**: vowel formants at 300 / 870 / 2240 Hz
 
 Every colour is normalised to the same power, so morphing does not change
 loudness. The position drifts slowly on its own (two slow sinusoids of 47 and

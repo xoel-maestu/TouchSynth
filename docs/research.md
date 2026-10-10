@@ -68,7 +68,7 @@ The works below shaped TouchSynth's design. Each entry notes how.
   (pad leakage while the digital input buffer is enabled) does not affect the
   sensor: CircuitPython disables the input buffer on ADC pins, which was
   confirmed on the board (IE = 0 on GP26).
-- **IEC 60601-1, medical electrical equipment — general requirements for
+- **IEC 60601-1, medical electrical equipment: general requirements for
   safety.** Patient leakage limit of 10 µA for applied parts in normal
   condition; the circuit limits current to ≈ 3 µA.
 - **Electrodermal activity (skin conductance) literature**, e.g. W. Boucsein,

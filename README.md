@@ -148,7 +148,7 @@ opening a pull request.
 
 ## License
 
-To be decided — all rights reserved until a license is chosen.
+To be decided. All rights reserved until a license is chosen.
 
 ## Acknowledgements and references
 

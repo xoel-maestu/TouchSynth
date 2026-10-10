@@ -22,7 +22,7 @@ through the sensing core by `tests/test_real_session.py`.
 
 Skin conductance changes with time of day, temperature and moisture. On the
 same setup and players, the median touch conductance was **0.35 µS in an
-evening session** and **0.07 µS in a night session** — about 5× lower.
+evening session** and **0.07 µS in a night session**, about 5× lower.
 
 With a fixed intensity top, the night session would use only the bottom of
 the range. With the adaptive top (2.2 × the 75th percentile of the last 12

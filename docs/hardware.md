@@ -51,7 +51,7 @@ the first pin next to the USB connector (VBUS, pin 40) sits on row N:
 
 - Each player **grips their electrode with the whole hand** (or wears it as a
   wristband). The grip contact is then low and steady, and what changes is the
-  contact *between* the players — which is what the instrument should hear.
+  contact *between* the players, which is what the instrument should hear.
 - Larger electrodes give a larger and steadier signal. Metal tubes, plates or
   copper tape around a handle all work; bare jumper pins work for testing but
   produce short contact glitches, which the software ignores (< 150 ms).
@@ -92,7 +92,7 @@ multimeter probe (Ω range) and they touch: note the reading for a light touch
 (`R_light`) and for a firm palm (`R_firm`). The best R1 is
 
 ```
-R1 = √(R_light · R_firm)
+R1 = √(R_light × R_firm)
 ```
 
 If it is far from 1 MΩ, fit the nearest standard value and set `R_PULLUP` in
