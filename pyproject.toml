@@ -4,6 +4,8 @@ version = "1.0.0"
 description = "An expressive ambient synth played by two people touching skin to skin (Raspberry Pi Pico 2 sensor + Python synthesis)"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Xoel Maestu" }]
 keywords = ["synthesizer", "touch", "skin conductance", "raspberry-pi-pico", "circuitpython", "sound-art", "nime"]
 classifiers = [

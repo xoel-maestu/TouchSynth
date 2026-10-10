@@ -148,7 +148,7 @@ opening a pull request.
 
 ## License
 
-To be decided. All rights reserved until a license is chosen.
+Released under the [MIT License](LICENSE).
 
 ## Acknowledgements and references
 
