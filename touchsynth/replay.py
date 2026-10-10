@@ -1,6 +1,7 @@
 """Offline rendering of a stream of touch readings (recorded sessions, simulations)."""
 
-from typing import Iterator, NamedTuple, Sequence
+from collections.abc import Iterator, Sequence
+from typing import NamedTuple
 
 import numpy as np
 

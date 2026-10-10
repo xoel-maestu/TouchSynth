@@ -13,7 +13,6 @@ import time
 import analogbufio
 import board
 import digitalio
-
 from touchcore import TouchSensor
 
 R_PULLUP = 1_000_000   # change if you fit a different resistor (470 kΩ / 2.2 MΩ)
@@ -35,5 +34,4 @@ while True:
     raw = sum(samples) // WINDOW   # boxcar over one mains period cancels 50/100/150 Hz hum
     g_us, intensity, touched = sensor.update(raw)
     led.value = touched
-    print("{},{},{:.4f},{:.4f},{}".format(
-        time.monotonic_ns() // 1_000_000, raw, g_us, intensity, int(touched)))
+    print(f"{time.monotonic_ns() // 1_000_000},{raw},{g_us:.4f},{intensity:.4f},{int(touched)}")

@@ -4,7 +4,7 @@ Lines starting with '#' are comments (the firmware announces itself with one).
 """
 
 import math
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 
 class Reading(NamedTuple):
@@ -19,7 +19,7 @@ def format_line(r: Reading) -> str:
     return f"{r.ms},{r.raw},{r.g_us:.4f},{r.intensity:.4f},{int(r.touched)}"
 
 
-def parse_line(line: str) -> Optional[Reading]:
+def parse_line(line: str) -> Reading | None:
     fields = line.strip().split(",")
     if len(fields) != 5:
         return None

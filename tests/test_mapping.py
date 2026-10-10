@@ -25,7 +25,7 @@ def test_cutoff_is_exponential():
                                    "lfo_hz", "sub_gain"])
 def test_parameters_rise_monotonically_with_intensity(field):
     values = [getattr(map_intensity(x), field) for x in XS]
-    assert all(b >= a for a, b in zip(values, values[1:]))
+    assert all(b >= a for a, b in zip(values, values[1:], strict=False))
 
 
 def test_reverb_gets_drier_with_firm_touch():

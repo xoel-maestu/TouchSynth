@@ -4,7 +4,7 @@ import math
 import sys
 import threading
 import time
-from typing import Callable, Iterable, Optional
+from collections.abc import Callable, Iterable
 
 from touchsynth.protocol import Reading, parse_line
 
@@ -17,7 +17,7 @@ OnReading = Callable[[Reading], None]
 RELEASED = Reading(0, 0, 0.0, 0.0, False)
 
 
-def find_pico_port(ports: Optional[Iterable] = None) -> Optional[str]:
+def find_pico_port(ports: Iterable | None = None) -> str | None:
     if ports is None:
         from serial.tools.list_ports import comports
         ports = comports()
@@ -61,7 +61,7 @@ class SerialSource(_ThreadedSource):
     that comes back under another name (ttyACM1) is still found.
     """
 
-    def __init__(self, port: Optional[str], on_reading: OnReading,
+    def __init__(self, port: str | None, on_reading: OnReading,
                  opener=_open_serial, finder=find_pico_port):
         super().__init__(on_reading)
         self._fixed_port = port

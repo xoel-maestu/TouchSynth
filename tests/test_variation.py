@@ -24,7 +24,7 @@ def test_is_reproducible_with_a_seed():
 def test_timbre_drifts_slowly_by_itself():
     v = Variation(seed=1)
     pos = positions(v, 0.0, 60.0)
-    steps = [circular(a, b) for a, b in zip(pos, pos[1:])]
+    steps = [circular(a, b) for a, b in zip(pos, pos[1:], strict=False)]
     assert max(pos) - min(pos) > 0.3          # it wanders...
     assert max(steps) < 0.02                  # ...smoothly
 

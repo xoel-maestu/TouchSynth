@@ -96,10 +96,10 @@ class FdnReverb:
             return np.concatenate([self.process(mono[i:i + limit])
                                    for i in range(0, len(mono), limit)])
         n = len(mono)
-        idx = [(p + np.arange(n)) % len(line) for p, line in zip(self.pos, self.lines)]
-        outs = np.stack([line[i] for line, i in zip(self.lines, idx)])
+        idx = [(p + np.arange(n)) % len(line) for p, line in zip(self.pos, self.lines, strict=True)]
+        outs = np.stack([line[i] for line, i in zip(self.lines, idx, strict=True)])
         feedback = self.MIX @ (outs * self.gains[:, None])
-        for j, (line, i) in enumerate(zip(self.lines, idx)):
+        for j, (line, i) in enumerate(zip(self.lines, idx, strict=True)):
             damped, self.damp_state[j] = lfilter(
                 self.damp_b, self.damp_a, feedback[j], zi=self.damp_state[j])
             line[i] = mono + damped
@@ -169,7 +169,8 @@ class PadSynth:
         out = np.zeros((n, 2))
         layer_gain = [1 / 3, 1 / 3, 1 / 3, params.fifth_gain, params.octave_gain, params.shimmer_gain]
         prev_layer_gain = [1 / 3, 1 / 3, 1 / 3, prev.fifth_gain, prev.octave_gain, prev.shimmer_gain]
-        pans_now, pans_prev = _pan_gains(self.pan_spread, params.width), _pan_gains(self.pan_spread, prev.width)
+        pans_now = _pan_gains(self.pan_spread, params.width)
+        pans_prev = _pan_gains(self.pan_spread, prev.width)
         for i, voice in enumerate(self.voices):
             f0 = params.root_hz * voice.ratio * 2 ** (self.detune_signs[i] * params.detune_cents / 1200)
             cutoff = params.cutoff_hz * (SHIMMER_AIR if i == SHIMMER else 1.0)

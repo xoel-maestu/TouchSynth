@@ -24,8 +24,8 @@ def pad_bits():
         return "memorymap not available"
     reg = memorymap.AddressRange(start=GPIO26_PAD, length=4)
     v = int.from_bytes(reg[0:4], "little")
-    return "pad=0x{:03x} ISO={} OD={} IE={} PUE={} PDE={}".format(
-        v, (v >> 8) & 1, (v >> 7) & 1, (v >> 6) & 1, (v >> 3) & 1, (v >> 2) & 1)
+    fields = (("ISO", 8), ("OD", 7), ("IE", 6), ("PUE", 3), ("PDE", 2))
+    return f"pad=0x{v:03x} " + " ".join(f"{name}={(v >> shift) & 1}" for name, shift in fields)
 
 
 def mean_analogio(n=200):

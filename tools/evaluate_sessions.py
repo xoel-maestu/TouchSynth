@@ -63,8 +63,8 @@ def evaluate(path):
     brightness = np.percentile(cutoff, 90) / np.percentile(cutoff, 10)
     degrees = [min(range(len(SCALE_ROOTS_HZ)), key=lambda d: abs(SCALE_ROOTS_HZ[d] - f.params.root_hz))
                for f in frames if f.touched]
-    notes = [d for d, prev in zip(degrees[1:], degrees) if d != prev]
-    steps = [abs(b - a) for a, b in zip(notes, notes[1:])]
+    notes = [d for d, prev in zip(degrees[1:], degrees, strict=False) if d != prev]
+    steps = [abs(b - a) for a, b in zip(notes, notes[1:], strict=False)]
     melodic = np.mean([s <= 2 for s in steps]) if steps else 0.0
     colours = len({int(p.timbre) for p in params})
     harsh = strike_harshness_db(frames)
@@ -80,7 +80,8 @@ def evaluate(path):
         ("timbre visits >= 4 palette colours", colours >= 4, f"{colours}"),
         ("notes vary (>= 5 distinct)", len(set(degrees)) >= 5, f"{len(set(degrees))}"),
         ("melodic: most note changes are steps of 1-2", melodic >= 0.8, f"{melodic:.0%}"),
-        ("hard strikes no harsher than the held tone (p90 2.5-5.5 kHz rise <= 0 dB)", harsh <= 0.0, f"{harsh:+.1f} dB"),
+        ("hard strikes no harsher than the held tone (p90 2.5-5.5 kHz rise <= 0 dB)",
+         harsh <= 0.0, f"{harsh:+.1f} dB"),
     ]
     print(f"\n{path}  ({frames[-1].t:.0f} s)")
     for name, ok, value in checks:

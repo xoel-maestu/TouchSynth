@@ -18,5 +18,5 @@ def volts(pin, n=200):
 
 
 while True:
-    print("# GP26={:.3f} V   GP27(unconnected)={:.3f} V".format(volts(sensor), volts(floating)))
+    print(f"# GP26={volts(sensor):.3f} V   GP27(unconnected)={volts(floating):.3f} V")
     time.sleep(0.5)

@@ -82,4 +82,4 @@ class Variation:
 
     def _drift(self, now: float) -> float:
         return sum(a * math.sin(2 * math.pi * now / period + phase)
-                   for (a, period), phase in zip(DRIFT, self._phases))
+                   for (a, period), phase in zip(DRIFT, self._phases, strict=True))
