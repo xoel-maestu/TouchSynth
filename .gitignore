@@ -4,3 +4,4 @@ __pycache__/
 sessions/
 *.uf2
 Raspberry_Pi_Pico2_files/
+.venv/
