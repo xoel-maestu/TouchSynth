@@ -1,9 +1,18 @@
 [project]
 name = "touchsynth"
-version = "1.4.0"
-description = "Touch synth: two people touching skin to skin play an expressive ambient pad (Raspberry Pi Pico 2 sensor + Python synth)"
+version = "1.0.0"
+description = "An expressive ambient synth played by two people touching skin to skin (Raspberry Pi Pico 2 sensor + Python synthesis)"
 readme = "README.md"
 requires-python = ">=3.10"
+authors = [{ name = "Xoel Maestu" }]
+keywords = ["synthesizer", "touch", "skin conductance", "raspberry-pi-pico", "circuitpython", "sound-art", "nime"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
+]
 dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
@@ -11,11 +20,15 @@ dependencies = [
     "pyserial>=3.5",
 ]
 
+[project.urls]
+Repository = "https://github.com/xoel-maestu/touchsynth"
+Issues = "https://github.com/xoel-maestu/touchsynth/issues"
+
 [project.scripts]
 touchsynth = "touchsynth.app:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.6"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,3 +39,10 @@ packages = ["touchsynth"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
