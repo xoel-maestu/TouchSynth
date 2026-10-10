@@ -82,7 +82,7 @@ def test_firmware_streams_parseable_lines_and_rejects_hum(monkeypatch):
     assert not readings[5].touched
     light, firm = readings[18], readings[29]
     assert light.touched and firm.touched
-    assert firm.intensity > light.intensity + 0.5
+    assert firm.intensity > light.intensity + 0.4
     # a full mains period per window: the ±3000-count hum leaves < 1% error
     assert abs(light.raw - divider_raw(8e6)) < 0.01 * 65535
 

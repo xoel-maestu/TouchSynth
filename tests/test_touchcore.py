@@ -1,7 +1,6 @@
 import math
 
 import pytest
-
 from touchcore import FULL_SCALE, TouchSensor, node_conductance_us
 
 R_PULLUP = 1_000_000
@@ -86,10 +85,15 @@ def test_touch_starts_on_the_first_window_but_needs_two_to_end():
 def test_hysteresis_keeps_touch_between_thresholds():
     s = make_sensor()
     feed(s, 1_000_000, 5)
-    _, _, touched = feed(s, 25_000_000, 5)  # between on (20 MΩ) and off (33 MΩ)
+    _, _, touched = feed(s, 60_000_000, 5)  # between on (50 MΩ) and off (83 MΩ)
     assert touched is True
-    _, _, touched = feed(s, 100_000_000, 5)
+    _, _, touched = feed(s, 300_000_000, 5)
     assert touched is False
+
+
+def test_very_light_touches_on_dry_skin_are_detected():
+    _, _, touched = feed(make_sensor(), 30_000_000, 2)  # 0.033 µS: real dry-skin touch
+    assert touched is True
 
 
 def test_steady_light_touch_stays_light():
@@ -108,21 +112,39 @@ def test_single_spike_does_not_shrink_later_readings():
     assert after == pytest.approx(before, abs=0.03)
 
 
-def test_range_expands_for_sustained_stronger_contact():
+def taps(sensor, skin_ohms, count):
+    for _ in range(count):
+        feed(sensor, skin_ohms, 10)     # 200 ms touch
+        feed(sensor, math.inf, 10)      # 200 ms apart
+
+
+def test_range_adapts_down_to_dry_skin():
     s = make_sensor()
-    _, before, _ = feed(s, 100_000, 5)
-    feed(s, 20_000, 50 * 10)  # ten seconds of much better contact
-    _, after, _ = feed(s, 100_000, 5)
+    _, before, _ = feed(s, 12_000_000, 5)  # 0.08 µS: a typical touch late at night
+    feed(s, math.inf, 5)
+    taps(s, 12_000_000, 12)
+    _, after, _ = feed(s, 12_000_000, 5)
+    assert after > before + 0.2
+    assert after > 0.6
+
+
+def test_range_adapts_up_to_moist_skin():
+    s = TouchSensor(r_pullup=R_PULLUP, r_series=R_SERIES, g_max_us=0.8)  # firmware setting
+    feed(s, math.inf, 5)
+    _, before, _ = feed(s, 1_250_000, 5)   # the default top: 0.8 µS
+    feed(s, math.inf, 5)
+    taps(s, 200_000, 12)                   # much better contact for a while
+    _, after, _ = feed(s, 1_250_000, 5)
     assert after < before - 0.1
 
 
-def test_range_returns_to_seed_after_a_while():
+def test_lighter_and_firmer_than_usual_still_differ_after_adapting():
     s = make_sensor()
-    _, before, _ = feed(s, 100_000, 5)
-    feed(s, 20_000, 50 * 10)
-    feed(s, 100_000, 50 * 300)  # five minutes of normal play
-    _, after, _ = feed(s, 100_000, 5)
-    assert after == pytest.approx(before, abs=0.03)
+    taps(s, 12_000_000, 12)
+    _, light, _ = feed(s, 40_000_000, 5)
+    feed(s, math.inf, 5)
+    _, firm, _ = feed(s, 6_000_000, 5)
+    assert firm > light + 0.4
 
 
 def test_stronger_than_range_is_clamped_to_one():
@@ -141,7 +163,7 @@ def test_sudden_release_to_open_circuit_does_not_crash():
 
 def test_rejects_a_firm_level_below_the_touch_threshold():
     with pytest.raises(ValueError):
-        TouchSensor(R_PULLUP, R_SERIES, g_max_us=0.05)
+        TouchSensor(R_PULLUP, R_SERIES, g_max_us=0.015)
 
 
 REST_LOAD = 15_000_000  # measured on the real board: ~0.067 µS with nobody touching
