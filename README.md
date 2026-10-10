@@ -1,200 +1,212 @@
 # TouchSynth
 
-Instrumento táctil para dos personas: cada una sujeta un electrodo y, al tocarse
-piel con piel, suena un pad ambiental continuo que **responde a cómo os tocáis**:
-suave o fuerte, rápido o lento, más o menos contacto, temblando o quieto,
-soltando de golpe o despacio. El timbre se transforma y las notas recorren una
-escala pentatónica con cada toque, así que nunca suena siempre igual.
+A touch instrument for two people. Each person holds one electrode; when they
+touch skin to skin, a continuous ambient pad sounds and **responds to how they
+touch**: soft or firm, fast or slow, more or less contact, trembling or still,
+letting go abruptly or slowly. The timbre morphs and the notes walk a pentatonic
+scale with each touch, so it never sounds the same twice.
 
 ```
- Persona A ── electrodo A ─┐                      ┌─ Pico 2 ── USB ── PC (Python)
-                           ├─ contacto piel-piel ─┤   mide          sintetiza, graba CSV
- Persona B ── electrodo B ─┘                      └─ conductancia
+ Person A ── electrode A ─┐                      ┌─ Pico 2 ── USB ── PC (Python)
+                          ├─ skin-to-skin touch ─┤   measures        synthesises, logs CSV
+ Person B ── electrode B ─┘                      └─ conductance
 ```
 
-## Por qué antes no variaba con la intensidad
+## Why the original version did not respond to touch intensity
 
-1. **Mapeo lineal de una magnitud logarítmica.** La resistencia piel-piel varía
-   en órdenes de magnitud (roce ≈ 1–10 MΩ, palma firme ≈ 50–300 kΩ). Leer el ADC
-   lineal comprimía casi todo el rango musical en una franja minúscula, y además
-   invertido (sin tocar = 1.0).
-2. **Parámetros sonoros poco perceptibles.** +20 Hz de tono y un filtro lineal
-   300→2100 Hz apenas se oyen. Ahora: un control → muchos parámetros con curvas
-   perceptuales (Hunt & Wanderley, NIME 2002).
-3. **Zumbido de red (50 Hz) y ADC de alta impedancia** sin condensador ni
-   promediado: el ruido tapaba las diferencias finas.
-4. **Pad demasiado grave y con pocos armónicos.** Por encima de ~900 Hz el filtro
-   no tenía nada que abrir, y 55 Hz no se oye en altavoces pequeños. Ahora las
-   notas van de Sol2 a Mi4 con 32 armónicos.
-5. pyo estaba roto en el entorno (`libjack` ausente). Se sustituye por numpy +
-   sounddevice (PipeWire/ALSA). Los scripts antiguos están en `legacy/` (necesitan pyo).
+1. **The sensor never reached the ADC.** On the original breadboard GP26 read
+   the same as an unconnected pin (~0.76 V).
+2. **Linear mapping of a logarithmic quantity.** Skin-to-skin resistance spans
+   orders of magnitude (light touch ≈ 1–10 MΩ, firm palm ≈ 50–300 kΩ). A linear
+   reading squeezed almost the whole musical range into a sliver, inverted.
+3. **Barely perceptible sound parameters.** +20 Hz of pitch and a linear
+   300→2100 Hz filter are hard to hear. Now one gesture drives many parameters
+   along perceptual curves (Hunt & Wanderley, NIME 2002).
+4. **Mains hum (50 Hz) on a high-impedance ADC**, with no averaging.
+5. **Sluggish smoothing** (easing off took 720 ms) and pyo broken in the
+   environment (missing `libjack`): replaced by numpy + sounddevice.
 
-## Material
+## Hardware
 
-| Pieza | Valor | Nota |
+| Part | Value | Note |
 |---|---|---|
-| Raspberry Pi Pico 2 | RP2350 + CircuitPython 10.0.3 | `.uf2` incluido en el repo local |
-| R1 (pull-up) | **1 MΩ** | ajustable tras calibrar (470 kΩ – 2,2 MΩ) |
-| R2 (serie, protección) | 100 kΩ, **opcional** | protección ESD; si la pones, `R_SERIES = 100_000` en `code.py` |
-| C1 | 10 nF (código `103`), **opcional** | estabiliza el ADC; no es imprescindible (la línea base se resta) |
-| 2 electrodos | placas/tubos metálicos, cinta de cobre, pulseras | cuanto más grandes y firmes al agarrarlos, mejor |
-| Cables, protoboard | | del kit |
+| Raspberry Pi Pico 2 | RP2350 + CircuitPython 10.0.3 | `.uf2` kept locally, not in git |
+| R1 (pull-up) | **1 MΩ** | adjustable after calibration (470 kΩ – 2.2 MΩ) |
+| R2 (series) | 100 kΩ, **optional** | ESD protection; if fitted set `R_SERIES = 100_000` in `code.py` |
+| C1 | 10 nF (`103`), **optional** | steadies the ADC; not required (the resting baseline is subtracted) |
+| 2 electrodes | metal plates/tubes, copper tape, wristbands | bigger and held in the whole hand is better |
+| Wires, breadboard | | from the kit |
 
-## Montaje
+## Wiring
 
 ```
 3V3(OUT) pin 36 ──[ R1 1 MΩ ]──┬── GP26/ADC0 pin 31
-                               ├──[ C1 10 nF, opcional ]── AGND pin 33
-                               └──[ R2 100 kΩ, opcional ]── electrodo A  (persona A)
+                               ├──[ C1 10 nF, optional ]── AGND pin 33
+                               └──[ R2 100 kΩ, optional ]── electrode A  (person A)
 
-GND pin 38 ────────────────────────────────────── electrodo B  (persona B)
+GND pin 38 ────────────────────────────────────── electrode B  (person B)
 ```
 
-Contando filas en la protoboard (USB arriba, columna derecha de la Pico): si el
-primer pin junto al USB (VBUS, pin 40) está en la fila N → GND = N+2,
-3V3(OUT) = N+4, AGND = N+7, **GP26 = N+9**. No conectes nada a N (5 V) ni a N+3
-(3V3_EN apaga la placa).
+Counting breadboard rows (USB at the top, right-hand column of the Pico): if the
+first pin next to the USB (VBUS, pin 40) is on row N → GND = N+2,
+3V3(OUT) = N+4, AGND = N+7, **GP26 = N+9**. Connect nothing to N (5 V) or N+3
+(3V3_EN switches the board off). See `docs/breadboard_setup.jpeg`.
 
-**Comprobación del cableado:** copia `tools/wiring_check.py` como `code.py`.
-Sin tocar, GP26 debe leer ≈ 3,3 V; si lee lo mismo que GP27 (~0,76 V) es que
-GP26 está al aire (era el fallo del montaje original: el sensor nunca llegaba
-al pin, por eso el sonido no variaba).
+**Wiring check:** copy `tools/wiring_check.py` to the board as `code.py`.
+Untouched, GP26 must read ≈ 3.3 V; if it reads the same as GP27 (~0.76 V), GP26
+is floating.
 
-- Cada persona **agarra su electrodo con toda la mano** (o pulsera): así la
-  resistencia de agarre es baja y constante y lo que varía es el contacto entre
-  ellas.
-- No conectes nada más a GP26 (nada de `DigitalInOut` en ese pin).
-- Seguridad: corriente máxima 3,3 V / 1,1 MΩ ≈ 3 µA, por debajo del límite de
-  10 µA de IEC 60601-1 para partes aplicadas. Usa el PC con batería o un USB de
-  calidad; no uses este montaje con equipos médicos implantados.
+- Each person **grips their electrode with the whole hand** (or a wristband), so
+  the grip resistance is low and steady and what changes is the contact between
+  them.
+- Connect nothing else to GP26 (no `DigitalInOut` on that pin).
+- Safety: at most 3.3 V / 1 MΩ ≈ 3 µA, below the 10 µA IEC 60601-1 limit for
+  applied parts. Use a laptop on battery or a good USB supply; do not use with
+  implanted medical devices.
 
-### Calibración (2 min, recomendable)
+### Calibration (2 minutes, recommended)
 
-1. Arranca el sintetizador (abajo). El medidor muestra `G=… uS` (conductancia).
-2. Tocaos con la **palma firme** unos segundos y anota el valor `G`.
-3. Pon ese valor en `G_MAX_US` de `firmware/code.py` y vuelve a desplegar.
-   Ese contacto será intensidad 1.0; el roce más leve que se detecta (33 MΩ) es 0.
-   Valor actual: **0,8 µS**, medido con las puntas metálicas de los cables
-   (una persona pellizcando: suave 0,1–0,3 µS, fuerte 0,4–0,65 µS). Con
-   electrodos grandes o palmas sube mucho (hasta ~10 µS): recalibra.
-4. Arranca la Pico **sin tocar los electrodos**: el primer segundo aprende la
-   conductancia de reposo (carga del propio ADC, ~0,07 µS) y la resta siempre.
-   Si alguien consigue un contacto mejor de forma sostenida (>3 s), el techo se
-   estira solo y vuelve a su valor en unos minutos; un pico suelto se ignora.
+1. Start the synth (below). The meter shows `G=… uS` (conductance).
+2. Touch with a **firm palm** for a few seconds and note `G`.
+3. Put that value in `G_MAX_US` in `firmware/code.py` and redeploy. That contact
+   becomes intensity 1.0; the lightest detected touch (33 MΩ) is 0. Current
+   value: **0.8 µS**, measured with bare jumper-pin electrodes (one person
+   pinching: light 0.1–0.3 µS, firm 0.4–0.65 µS). Larger electrodes or palms read
+   much higher (up to ~10 µS): recalibrate.
+4. Boot the Pico **without touching the electrodes**: it learns the resting
+   conductance (the ADC's own load, ~0.07 µS) and always subtracts it. If someone
+   keeps a better contact for more than 3 s the top stretches, and it relaxes
+   back over a few minutes; one-off spikes are ignored.
 
-### Ajuste opcional de R1 (con polímetro)
+### Optional: choosing R1 with a multimeter
 
-Cada persona sujeta una punta del polímetro (en Ω) y se tocan: anota la lectura
-con un roce ligero (`R_roce`) y con la palma firme (`R_firme`). El R1 óptimo es
-`√(R_roce · R_firme)` (máxima sensibilidad en escala log). Si sale lejos de
-1 MΩ, pon el valor comercial más cercano y cambia `R_PULLUP` en
-`firmware/code.py`.
+Each person holds one multimeter probe (Ω range) and they touch: note the
+reading for a light touch (`R_light`) and a firm palm (`R_firm`). The best R1 is
+`√(R_light · R_firm)` (maximum sensitivity on a log scale). If it is far from
+1 MΩ, fit the nearest standard value and change `R_PULLUP` in `firmware/code.py`.
 
-## Despliegue en la Pico 2
+## Deploying to the Pico 2
 
-1. (Solo la primera vez) Mantén **BOOTSEL** al enchufar → aparece la unidad
-   `RP2350` → copia `adafruit-circuitpython-raspberry_pi_pico2-en_US-10.0.3.uf2`.
-   Se reinicia como `CIRCUITPY`.
-2. `tools/deploy.sh` (o copia `firmware/code.py` → `CIRCUITPY/code.py` y
+1. (First time only) Hold **BOOTSEL** while plugging in → the `RP2350` drive
+   appears → copy `adafruit-circuitpython-raspberry_pi_pico2-en_US-10.0.3.uf2`.
+   It reboots as `CIRCUITPY`.
+2. `tools/deploy.sh` (or copy `firmware/code.py` → `CIRCUITPY/code.py` and
    `firmware/lib/touchcore.py` → `CIRCUITPY/lib/`).
-3. El LED de la placa se enciende mientras hay contacto. Puedes ver los datos
-   crudos con `screen /dev/ttyACM0` (`ms,raw,g_us,intensity,touched`).
+3. The board LED lights while there is contact. Raw data:
+   `screen /dev/ttyACM0` (`ms,raw,g_us,intensity,touched`).
 
-## Ejecutar el sintetizador (PC)
+## Running the synth (PC)
 
-```bash
-pipenv install                       # una vez
-pipenv run python -m touchsynth      # detecta la Pico sola (y la espera si no está)
-pipenv run python -m touchsynth --simulate     # sin hardware: gesto de prueba
-pipenv run python -m touchsynth --port /dev/ttyACM0 --volume 0.5 --device pipewire
-pipenv run python -m touchsynth --speakers full  # auriculares / equipo con graves
-pipenv run python -m touchsynth --list-devices  # salidas de audio disponibles
-```
-
-`--speakers small` (por defecto) es seguro en pantallas, portátiles y altavoces
-pequeños: corta los graves que no pueden reproducir (filtro de 120 Hz, sin
-subgrave). La salida lleva un limitador a −3 dBFS en cualquier caso.
-
-Cada sesión se graba en `sessions/AAAAMMDD-HHMMSS.csv`
-(`host_s,ms,raw,g_us,intensity,touched`) salvo con `--no-record`.
-
-Escuchar sin hardware ni tarjeta de sonido, o reescuchar una sesión grabada:
+Requires [uv](https://docs.astral.sh/uv/).
 
 ```bash
-PYTHONPATH=. pipenv run python tools/render.py --simulate demo.wav
-PYTHONPATH=. pipenv run python tools/render.py sessions/X.csv out.wav
-PYTHONPATH=. pipenv run python tools/evaluate_sessions.py sessions/*.csv  # criterios objetivos
+uv sync                              # once: creates .venv with Python 3.12 and dependencies
+uv run touchsynth                    # finds the Pico (and waits for it)
+uv run touchsynth --simulate         # no hardware: scripted gesture
+uv run touchsynth --port /dev/ttyACM0 --volume 0.5 --device pipewire
+uv run touchsynth --speakers full    # headphones / speakers with real bass
+uv run touchsynth --list-devices     # available audio outputs
 ```
 
-## Cómo responde al gesto
+`--speakers small` (default) is safe on monitors, laptops and small speakers:
+it removes bass they cannot reproduce (120 Hz high-pass, no sub-oscillator). The
+output always goes through a −3 dBFS peak limiter.
 
-Cada rasgo del gesto mueve su propia dimensión del sonido (para que no se pisen):
+**Bluetooth speakers** work through PipeWire like any other output: connect the
+speaker and make it the default output (e.g. `pactl set-default-sink
+bluez_output.<MAC>.1`). A2DP adds roughly 150–250 ms of latency, so wired output
+feels more immediate.
 
-| Gesto | Cómo se mide | Qué cambia |
+Every session is logged to `sessions/YYYYMMDD-HHMMSS.csv`
+(`host_s,ms,raw,g_us,intensity,touched`) unless `--no-record` is given.
+
+Listen without hardware or a sound card, or re-listen to a recorded session:
+
+```bash
+uv run python tools/render.py --simulate demo.wav
+uv run python tools/render.py sessions/X.csv out.wav
+uv run python tools/evaluate_sessions.py sessions/*.csv  # objective checks
+```
+
+## How it responds to gestures
+
+Each gesture feature drives its own sound dimension, so they do not fight:
+
+| Gesture | Measured as | What changes |
 |---|---|---|
-| **Más / menos contacto** | intensidad (log de la conductancia) | volumen −30…0 dB, brillo 100 Hz → 8 kHz, capas de quinta y octava, saturación, reverb (lejos → cerca) |
-| **Golpe rápido / toque lento** | velocidad en los primeros 40 ms (10–35 /s) | ataque 120 → 5 ms, ráfaga de ruido, destello de brillo (+1,5 oct, +9 dB de saturación, 150 ms) |
-| **Apretar / aflojar** | intensidad sobre una base lenta por toque (ignora la deriva del sudor) | anchura estéreo y desafinado |
-| **Temblar** | variación de 3+ Hz en 300 ms | vibrato 0–20 cents |
-| **Mantener** | duración del contacto | capa brillante dos octavas arriba que crece (τ 8 s) |
-| **Soltar de golpe / despacio** | tiempo de caída antes de soltar | cola de 0,35 a 3 s; al soltar de golpe, impulso de reverb |
+| **More / less contact** | intensity (log of conductance) | gain −30…0 dB, brightness 100 Hz → 8 kHz, fifth and octave layers, saturation, reverb (distant → close) |
+| **Fast strike / slow touch** | rise speed in the first 40 ms (10–35 /s) | attack 120 → 12 ms; a soft felt-mallet vibraphone note (louder and brighter for harder strikes); up to one octave of brightness, never above 3 kHz, fading over 350 ms |
+| **Squeeze / ease off** | intensity above a slow per-touch baseline (ignores sweat drift) | stereo width and detune |
+| **Tremble** | 3+ Hz variation over 300 ms | vibrato 0–20 cents |
+| **Hold** | contact duration | a layer two octaves up grows in (τ 8 s) |
+| **Let go fast / slowly** | fall time before release | tail 0.35–3 s; a fast lift throws the sound into the reverb |
 
-**Timbre y notas (variación):**
+**Soft strikes.** Strikes used to add a white-noise burst and extra saturation,
+which sounded like a harsh "crash". They now ring a modal "felt vibe" accent
+(STK ModalBar partials retuned to harmonics 1-2-4-6, pitched an octave above the
+pad) with nothing in the 2.5–5.5 kHz band rated most unpleasant (Kumar et al.,
+JASA 2008). On real sessions, hard strikes are 1–6 dB *softer* in that band than
+the held tone (previously +2 dB harsher).
 
-- El timbre se mueve por una paleta circular (flauta → cálido → hueco/clarinete
-  → coral "aa" → coral "uu"), deriva despacio y cada toque lo empuja (más lejos
-  cuanto más fuerte el golpe), siempre deslizándose.
-- Cada nuevo toque da un paso melódico (1 grado, 2 si el golpe es fuerte) por
-  una pentatónica de dos octavas (Sol2–Mi4) con portamento de 50 ms; tras una
-  pausa de más de 4 s vuelve a la octava grave. Los microcortes de contacto
-  (< 150 ms) no cambian nada.
+**Timbre and notes.**
 
-El primer toque se detecta en una ventana de 20 ms y el soltar en dos;
-presión y aflojado se reflejan en ~40 ms. Si se desconecta el cable, el sonido
-se desvanece (nunca se queda sonando).
+- The timbre moves around a circular palette (flute → warm → hollow/clarinet →
+  choir "ah" → choir "oo"). It drifts slowly and each touch pushes it (further
+  for harder strikes), always gliding.
+- Each new touch takes a melodic step (one degree, two for hard strikes) along a
+  two-octave pentatonic scale (G2–E4) with a 50 ms portamento; after a pause of
+  more than 4 s it returns to the low octave. Contact glitches (< 150 ms) change
+  nothing.
 
-## Arquitectura
+A touch is detected within one 20 ms window and a release within two; squeezing
+and easing off show up in ~40 ms. If the cable is pulled, the sound fades out
+(it never keeps droning).
+
+## Architecture
 
 ```
-firmware/code.py          Pico: ventanas de 20 ms (cancela 50 Hz) → touchcore → USB serie
-firmware/lib/touchcore.py conductancia, escala log adaptativa, histéresis (también se testea en PC)
-touchsynth/sources.py     lector serie con reconexión / simulador
-touchsynth/gestures.py    rasgos del gesto: golpe, presión, temblor, caída al soltar, duración
-touchsynth/variation.py   paleta de timbres y paseo melódico pentatónico
-touchsynth/controller.py  gestos + variación → parámetros y envolventes (hilo lector → callback sin locks)
-touchsynth/mapping.py     gesto → parámetros del sintetizador (curvas perceptuales)
-touchsynth/synth.py       pad aditivo (paleta de timbres, lowpass analítico) + reverb FDN
-touchsynth/output.py      paso-alto según altavoz + limitador de picos
-touchsynth/replay.py      render offline de lecturas (sesiones, simulación)
-touchsynth/recorder.py    CSV de sesión
-touchsynth/app.py         CLI, stream de audio, medidor en terminal
-tools/                    despliegue, comprobación de cableado, render y evaluación de sesiones
+firmware/code.py          Pico: 20 ms windows (cancel 50 Hz hum) → touchcore → USB serial
+firmware/lib/touchcore.py conductance, log scale, resting baseline, hysteresis (also tested on the PC)
+touchsynth/sources.py     serial reader with reconnection / simulator
+touchsynth/gestures.py    gesture features: strike, press, tremor, fall time, hold time
+touchsynth/variation.py   timbre palette and pentatonic note walk
+touchsynth/controller.py  gestures + variation → parameters and envelopes (sensor thread → lock-free audio callback)
+touchsynth/mapping.py     gesture → synth parameters (perceptual curves)
+touchsynth/synth.py       additive pad (timbre palette, analytic lowpass) + FDN reverb
+touchsynth/accent.py      felt-mallet modal accent for strikes
+touchsynth/output.py      speaker-profile high-pass + peak limiter
+touchsynth/replay.py      offline rendering of readings (sessions, simulation)
+touchsynth/recorder.py    session CSV
+touchsynth/app.py         CLI, audio stream, terminal meter
+tools/                    deploy, wiring check, render and session evaluation
+docs/                     original project notes and the breadboard photo
 ```
 
-Tests: `pipenv run python -m pytest -q` (incluye el firmware ejecutado con
-hardware simulado).
+Tests: `uv run pytest -q` (including the firmware run against simulated hardware).
 
-## Verificado en el hardware real (Pico 2, 2026-10-09)
+## Verified on the real hardware (Pico 2, October 2026)
 
-- Diagnóstico del montaje original: GP26 leía igual que un pin sin conectar
-  (~0,76 V): el sensor nunca llegaba al ADC. Con el cableado correcto, en reposo
-  0 falsos contactos en minutos de grabación; detección y suelta en < 100 ms.
-- Tres sesiones reales tocando (v1.0–v1.2) pasan los 8 criterios de
-  `tools/evaluate_sessions.py` con el motor final: sin clipping, 12–17 dB de
-  rango de volumen, brillo ×7–11, vibrato usado sin saturar, anchura variable,
-  4–5 colores de timbre, 6–9 notas distintas y 100 % de pasos melódicos.
-- Audio: bloques de 512 muestras y buffer de salida de 30 ms → 0 underflows en
-  3 × 60 s con la Pico real (con 256 / "low" había desde 4 por minuto hasta
-  cientos). Latencia de control ~40 ms, ataque en un golpe ~10 ms.
-- Una sesión real grabada es test de regresión (`tests/test_real_session.py`).
+- At rest, no false touches over minutes of recording; touch and release
+  detected in under 100 ms.
+- Four real touch sessions pass all 9 checks in `tools/evaluate_sessions.py`
+  with the final engine: no clipping, 12–17 dB of loudness range, brightness
+  ×7–15, vibrato used but not saturated, varying stereo width, 4–5 timbre colours,
+  6–9 distinct notes, 100 % melodic steps, and strikes no harsher than the held
+  tone.
+- Audio: 512-sample blocks and a 30 ms output buffer → no underflows in
+  3 × 60 s with the real Pico (256 samples or "low" latency gave from 4 per
+  minute up to hundreds). Control latency ~40 ms, strike attack ~12 ms.
+- A recorded real session is a regression test (`tests/test_real_session.py`).
 
-## Problemas frecuentes
+## Troubleshooting
 
-- **Nunca detecta contacto**: comprueba el GND común del electrodo B y que cada
-  persona agarra bien su electrodo; prueba manos ligeramente húmedas o R1 = 2,2 MΩ.
-- **Siempre "TOUCH"**: algo cortocircuita GP26 a GND; o R1 demasiado pequeña.
-- **Intensidad casi siempre en 1**: `G_MAX_US` demasiado bajo → recalibra.
-- **Intensidad nunca pasa de ~0,5**: `G_MAX_US` demasiado alto → recalibra.
-- **Se queda en "waiting for the Pico..."**: comprueba que aparece `/dev/ttyACM0`,
-  usa `--port`, y añade tu usuario al grupo `uucp` (Arch) / `dialout` (Debian).
-  Cierra cualquier `screen` abierto sobre el puerto.
+- **Never detects contact**: check the shared GND of electrode B and that each
+  person grips their electrode well; try slightly damp hands or R1 = 2.2 MΩ.
+- **Always "TOUCH"**: something shorts GP26 to GND, or R1 is too small.
+- **Intensity almost always 1**: `G_MAX_US` too low → recalibrate.
+- **Intensity never above ~0.5**: `G_MAX_US` too high → recalibrate.
+- **Stuck on "waiting for the Pico..."**: check that `/dev/ttyACM0` exists, use
+  `--port`, and add your user to the `uucp` (Arch) / `dialout` (Debian) group.
+  Close any `screen` session on the port.
+- **Crackles**: close other audio apps; the 30 ms output buffer is in
+  `touchsynth/app.py` (`OUTPUT_LATENCY_S`).
