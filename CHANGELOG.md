@@ -37,5 +37,5 @@ First public version, released under the MIT License.
 - Test suite: unit tests, the firmware running on CPython with stubbed
   CircuitPython modules, and a real-session regression fixture.
 
-[Unreleased]: https://github.com/xoel-maestu/touchsynth/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/xoel-maestu/touchsynth/releases/tag/v1.0.0
+[Unreleased]: https://github.com/xoel-maestu/TouchSynth/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/xoel-maestu/TouchSynth/releases/tag/v1.0.0

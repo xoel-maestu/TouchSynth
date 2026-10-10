@@ -4,7 +4,7 @@
 
 Please do **not** open a public issue for security problems. Report them
 privately through GitHub's
-[private vulnerability reporting](https://github.com/xoel-maestu/touchsynth/security/advisories/new).
+[private vulnerability reporting](https://github.com/xoel-maestu/TouchSynth/security/advisories/new).
 You will get an answer as soon as possible.
 
 ## Electrical safety

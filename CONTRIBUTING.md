@@ -6,8 +6,8 @@ pull requests are all welcome.
 ## Getting started
 
 ```bash
-git clone https://github.com/xoel-maestu/touchsynth.git
-cd touchsynth
+git clone https://github.com/xoel-maestu/TouchSynth.git
+cd TouchSynth
 uv sync                       # Python 3.12 virtualenv with runtime + dev dependencies
 uv run pytest                 # all tests should pass
 uv run touchsynth --simulate  # hear it without hardware

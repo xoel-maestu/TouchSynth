@@ -1,6 +1,6 @@
 # TouchSynth
 
-[![CI](https://github.com/xoel-maestu/touchsynth/actions/workflows/ci.yml/badge.svg)](https://github.com/xoel-maestu/touchsynth/actions/workflows/ci.yml)
+[![CI](https://github.com/xoel-maestu/TouchSynth/actions/workflows/ci.yml/badge.svg)](https://github.com/xoel-maestu/TouchSynth/actions/workflows/ci.yml)
 
 A touch instrument for two people. Each player holds one electrode; when they
 touch skin to skin, a Raspberry Pi Pico 2 measures the conductance of the contact

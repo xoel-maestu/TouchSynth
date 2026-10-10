@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/xoel-maestu/touchsynth"
-Issues = "https://github.com/xoel-maestu/touchsynth/issues"
+Repository = "https://github.com/xoel-maestu/TouchSynth"
+Issues = "https://github.com/xoel-maestu/TouchSynth/issues"
 
 [project.scripts]
 touchsynth = "touchsynth.app:main"
