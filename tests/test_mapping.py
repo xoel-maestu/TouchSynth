@@ -45,9 +45,14 @@ def test_light_and_firm_touch_sound_clearly_different():
     assert firm.gain_db - light.gain_db > 12.0         # clearly louder (plus layers)
 
 
-def test_bloom_brightens_up_to_one_and_a_half_octaves():
-    base = map_intensity(0.5).cutoff_hz
-    assert map_intensity(0.5, bloom=1.0).cutoff_hz == pytest.approx(2 ** 1.5 * base)
+def test_bloom_brightens_one_octave_but_never_into_the_harsh_band():
+    base = map_intensity(0.3).cutoff_hz
+    assert map_intensity(0.3, bloom=1.0).cutoff_hz == pytest.approx(2 * base)
+    assert map_intensity(0.7, bloom=1.0).cutoff_hz <= max(3000.0, map_intensity(0.7).cutoff_hz)
+
+
+def test_strikes_do_not_add_saturation():
+    assert map_intensity(0.8, bloom=1.0).drive_db == map_intensity(0.8).drive_db
 
 
 def test_tremor_adds_vibrato():
@@ -68,9 +73,9 @@ def test_long_holds_grow_a_shimmer_layer():
     assert 0.0 < early < late
 
 
-def test_transient_and_reverb_boost_pass_through_clamped():
-    p = map_intensity(0.5, transient=0.6, reverb_boost=2.0)
-    assert p.noise_gain == pytest.approx(0.6)
+def test_strike_and_reverb_boost_pass_through_clamped():
+    p = map_intensity(0.5, strike=0.6, strike_id=3, reverb_boost=2.0)
+    assert (p.strike, p.strike_id) == (pytest.approx(0.6), 3)
     assert p.reverb_wet <= 0.9
 
 

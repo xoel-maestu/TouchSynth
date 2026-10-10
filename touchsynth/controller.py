@@ -12,13 +12,12 @@ from typing import NamedTuple
 from touchsynth.gestures import GestureTracker
 from touchsynth.mapping import SynthParams, map_intensity
 from touchsynth.smoothing import OneEuroFilter
-from touchsynth.variation import Variation
+from touchsynth.variation import RETOUCH_MIN_GAP_S, Variation
 
-ATTACK_SLOW_S, ATTACK_FAST_S = 0.12, 0.005   # gate attack: soft touch .. slap
+ATTACK_SLOW_S, ATTACK_FAST_S = 0.12, 0.012   # gate attack: soft touch .. slap (no clicks)
 RELEASE_MIN_S, RELEASE_MAX_S = 0.35, 3.0     # gate release follows how slowly you let go
 RELEASE_PER_FALL = 3.0                       # release tau grows 3 s per second of lift
-TRANSIENT_DECAY_S = 0.03
-BLOOM_DECAY_S = 0.15
+BLOOM_DECAY_S = 0.35                         # smooth brightness fade, not a 150 ms "zap"
 LIFT_REVERB = 0.35                           # extra reverb send after a fast lift ...
 LIFT_REVERB_DECAY_S = 0.6                    # ... decaying like this
 STALE_AFTER_S = 0.25                         # no readings for this long (cable pulled)
@@ -48,6 +47,7 @@ class _State(NamedTuple):
     lift: float
     release: float
     last_update: float
+    strike_id: int
 
 
 class TouchController:
@@ -57,7 +57,7 @@ class TouchController:
         # light smoothing only: the real sensor is quiet (steady-hold std ~0.002)
         self._level = OneEuroFilter(rate_hz, mincutoff=4.0, beta=5.0, dcutoff=5.0)
         self._state = _State(0.0, _Envelope(0.0, 0.0, 1.0, 0.0),
-                             0.0, -1e9, 0.0, 0.0, 0.0, 0.0, -1e9, 0.0)
+                             0.0, -1e9, 0.0, 0.0, 0.0, 0.0, -1e9, 0.0, 0)
 
     @property
     def intensity(self) -> float:
@@ -66,13 +66,16 @@ class TouchController:
     def update(self, intensity: float, touched: bool, now_s: float) -> None:
         g, s = self._gesture, self._state
         g.update(intensity, touched, now_s)
-        level, gate, lift, hold = s.level, s.gate, s.lift, s.hold_s
+        level, gate, lift, hold, strike_id = s.level, s.gate, s.lift, s.hold_s, s.strike_id
         if now_s - s.last_update > STALE_AFTER_S and gate.target == 1.0:
             gate = _Envelope(self._gate_at(s, s.last_update, now_s), 1.0, gate.tau, now_s)
         if touched:
             if g.onset_time == now_s:
                 self._level.value = None  # start from the first reading, not from 0
-                self._variation.on_touch(g.strike, now_s, rested_s=now_s - s.release)
+                rested = now_s - s.release
+                self._variation.on_touch(g.strike, now_s, rested_s=rested)
+                if rested >= RETOUCH_MIN_GAP_S:  # contact glitches do not ring the accent
+                    strike_id += 1
             level = self._level(intensity)
             hold = g.hold_s
             attack = ATTACK_SLOW_S * (ATTACK_FAST_S / ATTACK_SLOW_S) ** g.strike
@@ -83,7 +86,7 @@ class TouchController:
             gate = _Envelope(gate.at(now_s), 0.0, release, now_s)
             lift = LIFT_REVERB * max(0.0, 1.0 - g.fall_time / 0.3)
         self._state = _State(level, gate, g.strike, g.onset_time, g.tremor, g.press,
-                             hold, lift, g.release_time, now_s)
+                             hold, lift, g.release_time, now_s, strike_id)
 
     @staticmethod
     def _gate_at(s: _State, last_update: float, now_s: float) -> float:
@@ -101,7 +104,7 @@ class TouchController:
         params = map_intensity(
             s.level,
             bloom=s.strike * math.exp(-since_onset / BLOOM_DECAY_S),
-            transient=s.strike * math.exp(-since_onset / TRANSIENT_DECAY_S),
+            strike=s.strike, strike_id=s.strike_id,
             tremor=s.tremor, press=s.press, hold_s=s.hold_s,
             reverb_boost=s.lift * math.exp(-max(0.0, now_s - s.release) / LIFT_REVERB_DECAY_S),
             timbre=timbre, root_hz=root_hz,

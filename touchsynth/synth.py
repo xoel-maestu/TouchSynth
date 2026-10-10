@@ -10,6 +10,7 @@ import math
 import numpy as np
 from scipy.signal import lfilter
 
+from touchsynth.accent import StrikeAccent
 from touchsynth.mapping import SynthParams
 from touchsynth.output import HighPass, PeakLimiter
 
@@ -19,7 +20,6 @@ MIX_LEVEL = 0.15  # full intensity: mix peak ~2.2 x drive 4 x 0.15 ~ 1.3 into ta
 VIBRATO_HZ = 5.5
 SHIMMER = 5         # index of the two-octaves-up voice in the layout
 SHIMMER_AIR = 2.0   # it is filtered an octave above the pad: "air"
-NOISE_LEVEL = 1.5  # strike burst, before the saturator (it is lowpassed at the pad cutoff)
 
 
 def _formants(fk: np.ndarray, centres: tuple) -> np.ndarray:
@@ -107,6 +107,18 @@ class FdnReverb:
         return np.stack([outs[0] + outs[2], outs[1] + outs[3]], axis=1) * 0.5
 
 
+ACCENT_RATIOS = (2.0, 3.0, 2.0, 4.0)  # round robin: octave, fifth above, octave, two octaves
+ACCENT_MAX_HZ = 750.0
+
+
+def _accent_pitch(root_hz: float, strike_id: int) -> float:
+    """One octave above the pad (felt-vibe register), varied so taps are not mechanical."""
+    f1 = root_hz * ACCENT_RATIOS[strike_id % len(ACCENT_RATIOS)]
+    while f1 > ACCENT_MAX_HZ:
+        f1 /= 2.0
+    return f1
+
+
 def _pan_gains(spread: np.ndarray, width: float) -> np.ndarray:
     """Equal-power (L, R) gains per voice; width 0 = mono, 1 = full spread."""
     pan = 0.5 + 0.5 * np.clip(spread * width, -1.0, 1.0)
@@ -128,8 +140,8 @@ class PadSynth:
         self.sub_phase = 0.0
         self.lfo_phase = 0.0
         self.vibrato_phase = 0.0
-        self._noise = np.random.default_rng(7)
-        self._noise_state = np.zeros(1)
+        self.accent = StrikeAccent(sample_rate)
+        self._strike_id = 0
         self.reverb = FdnReverb(sample_rate) if reverb else None
         self.highpass = HighPass(sample_rate, speakers)
         self.sub_enabled = speakers == "full"  # small speakers cannot play it anyway
@@ -166,11 +178,6 @@ class PadSynth:
             signal *= lerp(prev_layer_gain[i], layer_gain[i])
             out += signal[:, None] * (pans_prev[i] + np.outer(ramp, pans_now[i] - pans_prev[i]))
 
-        if params.noise_gain > 0 or prev.noise_gain > 0:
-            pole = np.exp(-2 * np.pi * min(params.cutoff_hz, 0.45 * self.sample_rate) / self.sample_rate)
-            noise, self._noise_state = lfilter([1 - pole], [1, -pole], self._noise.standard_normal(n),
-                                               zi=self._noise_state)
-            out += (noise * NOISE_LEVEL * lerp(prev.noise_gain, params.noise_gain))[:, None]
 
         if self.sub_enabled:
             sub_phases = self.sub_phase + np.cumsum(lerp(prev.root_hz, params.root_hz) / 2) / self.sample_rate
@@ -188,6 +195,11 @@ class PadSynth:
 
         level = 10 ** (lerp(prev.gain_db, params.gain_db) / 20) * lerp(self._prev_gate, gate)
         out *= level[:, None]
+
+        if params.strike_id != self._strike_id:
+            self._strike_id = params.strike_id
+            self.accent.trigger(_accent_pitch(params.root_hz, params.strike_id), params.strike)
+        out += self.accent.render(n)[:, None] * np.sqrt(0.5)
 
         if self.reverb is not None:
             wet = lerp(prev.reverb_wet, params.reverb_wet)[:, None]

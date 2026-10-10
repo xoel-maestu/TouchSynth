@@ -22,7 +22,8 @@ class SynthParams:
     vibrato_cents: float = 0.0  # pitch wobble depth (from tremor)
     width: float = 0.5          # stereo spread of the voices, 0..1 (from press)
     shimmer_gain: float = 0.0   # two-octaves-up layer that grows on long holds
-    noise_gain: float = 0.0     # percussive noise burst on strikes
+    strike: float = 0.0         # velocity of the latest strike (accent loudness/brightness)
+    strike_id: int = 0          # increments on each new touch: rings the accent once
     timbre: float = 1.0         # position on the tone-colour palette (synth.TIMBRES)
     root_hz: float = 110.0      # root note of the pad
 
@@ -49,13 +50,22 @@ def _fade_in(x: float, start: float, end: float, top_db: float) -> float:
     return math.sin(t * math.pi / 2) * _db(top_db)
 
 
+BLOOM_CEILING_HZ = 3000.0  # strikes never push brightness into the 2.5-5.5 kHz harsh band
+
+
+def _bloomed(cutoff_hz: float, bloom: float) -> float:
+    """Up to one octave brighter on a strike, but not above BLOOM_CEILING_HZ."""
+    return max(cutoff_hz, min(cutoff_hz * 2.0 ** bloom, BLOOM_CEILING_HZ))
+
+
 def map_intensity(x: float, bloom: float = 0.0, *, tremor: float = 0.0,
-                  press: float = 0.0, hold_s: float = 0.0, transient: float = 0.0,
-                  reverb_boost: float = 0.0, timbre: float = 1.0,
+                  press: float = 0.0, hold_s: float = 0.0, strike: float = 0.0,
+                  strike_id: int = 0, reverb_boost: float = 0.0, timbre: float = 1.0,
                   root_hz: float = 110.0) -> SynthParams:
     """Map touch intensity x (0..1) plus gesture expression to synth parameters.
 
-    bloom/transient: decaying strike envelopes (0..1); tremor: 0..1; press:
+    bloom: decaying strike brightness (0..1); strike/strike_id: the latest
+    strike, for the accent; tremor: 0..1; press:
     intensity above the per-touch baseline; hold_s: contact duration;
     reverb_boost: decaying lift envelope; timbre and root_hz come from Variation.
     """
@@ -64,18 +74,19 @@ def map_intensity(x: float, bloom: float = 0.0, *, tremor: float = 0.0,
     squeeze = _clamp(press / 0.25)  # real settled squeezes: p90 0.17, p99 0.28
     return SynthParams(
         gain_db=_lin(x, -30.0, 0.0),
-        cutoff_hz=_exp(x, 100.0, 8000.0) * 2.0 ** (1.5 * bloom),
+        cutoff_hz=_bloomed(_exp(x, 100.0, 8000.0), bloom),
         detune_cents=_exp(x, 3.0, 12.0) + 10.0 * squeeze,
         fifth_gain=_fade_in(x, 0.25, 0.6, -6.0),
         octave_gain=_fade_in(x, 0.55, 0.95, -9.0),
-        drive_db=_lin(x, 0.0, 12.0) + 9.0 * bloom,  # strikes briefly "break up"
+        drive_db=_lin(x, 0.0, 12.0),  # no extra drive on strikes: it read as a "crash"
         lfo_hz=_exp(x, 0.08, 0.6),
         reverb_wet=min(0.9, _lin(x, 0.5, 0.25) + max(0.0, reverb_boost)),
         sub_gain=_db(_lin(x, -12.0, -3.0)),
         vibrato_cents=20.0 * _clamp(tremor),
         width=_clamp(0.3 + 0.3 * x + 0.6 * squeeze),
         shimmer_gain=0.5 * (1.0 - math.exp(-max(0.0, hold_s) / 8.0)) * math.sqrt(x),
-        noise_gain=_clamp(transient),
+        strike=_clamp(strike),
+        strike_id=strike_id,
         timbre=timbre,
         root_hz=root_hz,
     )

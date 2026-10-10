@@ -62,8 +62,13 @@ def test_brightness_keeps_rising_up_to_full_intensity():
     assert steady_centroid(1.0) > 1.2 * steady_centroid(0.75)
 
 
-def test_bloom_is_audible_on_firm_slaps():
-    assert steady_centroid(0.9, bloom=1.0) > 1.2 * steady_centroid(0.9)
+def test_bloom_is_audible_at_moderate_intensity():
+    assert steady_centroid(0.4, bloom=1.0) > 1.2 * steady_centroid(0.4)
+
+
+def test_bloom_adds_nothing_once_brightness_is_already_high():
+    # firm slaps are conveyed by the accent, not by pushing into the harsh band
+    assert steady_centroid(0.9, bloom=1.0) == pytest.approx(steady_centroid(0.9), rel=0.02)
 
 
 def test_blocks_join_without_clicks():
@@ -160,18 +165,22 @@ def test_shimmer_adds_brightness():
     assert spectral_centroid(dry(replace(p, shimmer_gain=0.5))) > 1.15 * spectral_centroid(dry(p))
 
 
-def test_noise_burst_is_added_on_strikes():
+def test_a_new_strike_rings_the_accent_once():
     from dataclasses import replace
     p = map_intensity(0.6)
-    clean, burst = dry(p, 0.2), dry(replace(p, noise_gain=1.0), 0.2)
-    assert rms(burst - clean) > 0.01
+    synth = PadSynth(FS, reverb=False)
+    synth.render(BLOCK, p, 1.0)
+    struck = replace(p, strike=1.0, strike_id=1)
+    synth.render(BLOCK, struck, 1.0)
+    synth.render(BLOCK, struck, 1.0)          # same strike id: no retrigger
+    assert len(synth.accent.voices) == 1
 
 
 def test_limiter_keeps_peaks_below_the_ceiling_in_the_worst_case():
     from dataclasses import replace
     from touchsynth.output import CEILING
     synth = PadSynth(FS)
-    worst = replace(map_intensity(1.0, bloom=1.0, transient=1.0, tremor=1.0, press=0.3, hold_s=30.0),
+    worst = replace(map_intensity(1.0, bloom=1.0, tremor=1.0, press=0.3, hold_s=30.0),
                     gain_db=6.0)
     out = np.concatenate([synth.render(BLOCK, worst, 1.0) for _ in range(200)])
     assert np.max(np.abs(out)) <= CEILING + 1e-6

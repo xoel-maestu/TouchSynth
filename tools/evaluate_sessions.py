@@ -22,6 +22,30 @@ def load(path):
     return [(t - rows[0][0], x, touched) for t, x, touched in rows]
 
 
+def strike_harshness_db(frames):
+    """Rise of 2.5-5.5 kHz energy (the band rated most unpleasant, Kumar et al.
+    2008) in the first 60 ms of a touch vs. 300-600 ms later, for the hardest
+    strikes (90th percentile): that is where a harsh "crash" lives. Only touches
+    held >= 0.6 s count, so the reference is the sustained tone, not the tail."""
+    audio = np.concatenate([f.audio for f in frames]).mean(axis=1)
+    block, rises = len(frames[0].audio), []
+    held = int(0.6 * 48000 / block) + 1  # compare within the same touch, not with its reverb tail
+    onsets = [i for i in range(1, len(frames) - held)
+              if not frames[i - 1].touched and all(f.touched for f in frames[i:i + held])]
+    for i in onsets:
+        start = i * block
+        early, late = audio[start:start + 2880], audio[start + 14400:start + 28800]
+        if len(late) < 14400:
+            continue
+        band = []
+        for seg in (early, late):
+            spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2 / len(seg)
+            f = np.fft.rfftfreq(len(seg), 1 / 48000)
+            band.append(spec[(f > 2500) & (f < 5500)].sum() / spec.sum())
+        rises.append(10 * np.log10((band[0] + 1e-12) / (band[1] + 1e-12)))
+    return float(np.percentile(rises, 90)) if rises else 0.0
+
+
 def spread(values):
     return np.percentile(values, 90) - np.percentile(values, 10) if values else 0.0
 
@@ -43,6 +67,7 @@ def evaluate(path):
     steps = [abs(b - a) for a, b in zip(notes, notes[1:])]
     melodic = np.mean([s <= 2 for s in steps]) if steps else 0.0
     colours = len({int(p.timbre) for p in params})
+    harsh = strike_harshness_db(frames)
     checks = [
         ("no clipping (peak <= ceiling)", peak <= CEILING + 1e-6, f"{peak:.3f}"),
         ("loudness follows touch (gain p10..p90 >= 8 dB)", spread(gain) >= 8, f"{spread(gain):.1f} dB"),
@@ -55,6 +80,7 @@ def evaluate(path):
         ("timbre visits >= 4 palette colours", colours >= 4, f"{colours}"),
         ("notes vary (>= 5 distinct)", len(set(degrees)) >= 5, f"{len(set(degrees))}"),
         ("melodic: most note changes are steps of 1-2", melodic >= 0.8, f"{melodic:.0%}"),
+        ("hard strikes no harsher than the held tone (p90 2.5-5.5 kHz rise <= 0 dB)", harsh <= 0.0, f"{harsh:+.1f} dB"),
     ]
     print(f"\n{path}  ({frames[-1].t:.0f} s)")
     for name, ok, value in checks:
